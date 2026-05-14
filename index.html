@@ -579,13 +579,15 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
           <span class="search-icon">🔍</span>
           <input type="text" id="dealSearch" placeholder="顧客名・商品名で検索..." oninput="renderDeals()" />
         </div>
+        <select id="dealMonthFilter" onchange="renderDeals()" style="padding:9px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;background:var(--surface);color:var(--text);">
+          <option value="">すべての月</option>
+        </select>
         <select id="dealCustomerFilter" onchange="renderDeals()" style="padding:9px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;background:var(--surface);color:var(--text);">
           <option value="">すべての顧客</option>
         </select>
         <select id="dealStatusFilter" onchange="renderDeals()" style="padding:9px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;background:var(--surface);color:var(--text);">
           <option value="">すべてのステータス</option>
           <option value="paid">支払い済み</option>
-          <option value="received">受領済み</option>
           <option value="cancelled">キャンセル</option>
           <option value="none">未設定</option>
         </select>
@@ -596,13 +598,19 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
 
     <!-- Deal Edit Modal -->
     <div id="deal-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center;">
-      <div style="background:#fff;border-radius:12px;padding:28px 32px;width:680px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div style="background:#fff;border-radius:12px;padding:28px 32px;width:780px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
           <div style="font-size:16px;font-weight:700;color:var(--navy);">取引を編集</div>
           <button onclick="closeDealModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-3);">✕</button>
         </div>
+        <!-- タブ -->
+        <div style="display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--border);padding-bottom:12px;">
+          <button id="deal-tab-edit" onclick="switchDealTab('edit')" style="padding:6px 18px;font-size:12px;font-weight:700;border-radius:20px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;font-family:inherit;">✏️ 編集</button>
+          <button id="deal-tab-preview" onclick="switchDealTab('preview')" style="padding:6px 18px;font-size:12px;font-weight:700;border-radius:20px;border:1px solid var(--border-strong);background:#fff;color:var(--text-2);cursor:pointer;font-family:inherit;">📄 見積書プレビュー</button>
+        </div>
         <div id="deal-modal-body"></div>
-        <div style="display:flex;gap:10px;margin-top:20px;">
+        <div id="deal-modal-preview" style="display:none;"></div>
+        <div id="deal-modal-footer" style="display:flex;gap:10px;margin-top:20px;">
           <button onclick="closeDealModal()" style="flex:1;padding:10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-family:inherit;font-size:13px;cursor:pointer;">キャンセル</button>
           <button onclick="saveDealEdit()" style="flex:2;padding:10px;background:var(--navy);color:#fff;border:none;border-radius:var(--radius-sm);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">保存する</button>
         </div>
@@ -1400,16 +1408,32 @@ function renderDealSummary() {
   document.getElementById('d-profit-usd').textContent = '利益 ' + fmtUSD(totalProfitUSD);
 }
 
+function updateDealMonthFilter() {
+  const sel = document.getElementById('dealMonthFilter');
+  if (!sel) return;
+  const cur = sel.value;
+  const months = [...new Set(deals.map(d => d.savedAt.slice(0,7)))].sort().reverse();
+  sel.innerHTML = '<option value="">すべての月</option>' +
+    months.map(m => {
+      const [y, mo] = m.split('-');
+      return `<option value="${m}" ${cur===m?'selected':''}>${y}年${parseInt(mo)}月</option>`;
+    }).join('');
+}
+
 function renderDeals() {
   updateDealCustomerFilter();
-  const q   = (document.getElementById('dealSearch').value || '').toLowerCase();
-  const cf  = document.getElementById('dealCustomerFilter').value;
-  const sf  = document.getElementById('dealStatusFilter').value;
+  updateDealMonthFilter();
+  const q  = (document.getElementById('dealSearch').value || '').toLowerCase();
+  const cf = document.getElementById('dealCustomerFilter').value;
+  const sf = document.getElementById('dealStatusFilter').value;
+  const mf = document.getElementById('dealMonthFilter').value;
+
   const filtered = deals.filter(d => {
     const matchQ  = !q || d.clientName.toLowerCase().includes(q) || d.rows.some(r => r.name.toLowerCase().includes(q));
     const matchCF = !cf || d.clientName === cf;
     const matchSF = !sf || d.status === sf;
-    return matchQ && matchCF && matchSF;
+    const matchMF = !mf || d.savedAt.slice(0,7) === mf;
+    return matchQ && matchCF && matchSF && matchMF;
   }).slice().reverse();
 
   const el = document.getElementById('dealList');
@@ -1418,62 +1442,91 @@ function renderDeals() {
   const statusCfg = {
     none:      { label: '未設定',    bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
     paid:      { label: '支払い済み', bg: '#EFF6FF', color: '#2563EB', border: '#BFDBFE' },
-    received:  { label: '受領済み',  bg: '#ECFDF5', color: '#059669', border: '#A7F3D0' },
     cancelled: { label: 'キャンセル', bg: '#FEF2F2', color: '#DC2626', border: '#FECACA' },
   };
 
-  el.innerHTML = filtered.map(d => {
-    const date   = new Date(d.savedAt).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
-    const time   = new Date(d.savedAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-    const linked = d.customerId ? customers.find(c=>c.id===d.customerId) : null;
-    const st     = statusCfg[d.status] || statusCfg.none;
-    const statusButtons = Object.entries(statusCfg).filter(([k])=>k!=='none').map(([k,v])=>
-      `<button onclick="setDealStatus(${d.id},'${k}')" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid ${v.border};border-radius:20px;background:${d.status===k?v.bg:'#fff'};color:${v.color};cursor:pointer;">${v.label}</button>`
-    ).join('');
+  // 月ごとにグループ化
+  const groups = {};
+  filtered.forEach(d => {
+    const ym = d.savedAt.slice(0,7);
+    if (!groups[ym]) groups[ym] = [];
+    groups[ym].push(d);
+  });
+
+  el.innerHTML = Object.entries(groups).map(([ym, groupDeals]) => {
+    const [y, mo] = ym.split('-');
+    const monthTotalJPY = groupDeals.reduce((s,d) => s+d.grandJPY, 0);
+    const monthTotalUSD = groupDeals.reduce((s,d) => s+d.grandUSD, 0);
+    const monthLabel = `${y}年${parseInt(mo)}月`;
+
+    const cards = groupDeals.map(d => {
+      const date   = new Date(d.savedAt).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+      const time   = new Date(d.savedAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+      const linked = d.customerId ? customers.find(c=>c.id===d.customerId) : null;
+      const st     = statusCfg[d.status] || statusCfg.none;
+      const statusButtons = Object.entries(statusCfg).filter(([k])=>k!=='none').map(([k,v])=>
+        `<button onclick="setDealStatus(${d.id},'${k}')" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid ${v.border};border-radius:20px;background:${d.status===k?v.bg:'#fff'};color:${v.color};cursor:pointer;">${v.label}</button>`
+      ).join('');
+
+      return `
+      <div class="card" style="margin-bottom:10px;${d.status==='cancelled'?'opacity:0.65;':''}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <div style="font-size:15px;font-weight:700;color:var(--navy);">${d.clientName}</div>
+              <span style="padding:2px 10px;font-size:11px;font-weight:700;border-radius:20px;background:${st.bg};color:${st.color};border:1px solid ${st.border};">${st.label}</span>
+            </div>
+            ${d.memo ? `<div style="font-size:12px;color:var(--text-2);margin-top:5px;background:var(--bg);padding:5px 10px;border-radius:4px;border-left:3px solid var(--border-strong);">📝 ${d.memo}</div>` : ''}
+            <div style="font-size:12px;color:var(--text-3);margin-top:4px;font-family:'DM Mono',monospace;">${d.qno} ｜ ${date} ${time}</div>
+            ${linked ? `<div style="font-size:11px;color:var(--accent);margin-top:3px;">👥 ${linked.name}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            ${statusButtons}
+            <button onclick="openDealEdit(${d.id})" style="padding:5px 14px;font-size:12px;font-weight:600;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);cursor:pointer;margin-left:4px;">編集</button>
+            <button onclick="deleteDeal(${d.id})" style="padding:5px 14px;font-size:12px;font-weight:600;border:1px solid var(--border);border-radius:var(--radius-sm);background:none;color:var(--danger);cursor:pointer;">削除</button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;">
+          <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 14px;">
+            <div style="font-size:10px;color:var(--text-3);font-weight:700;margin-bottom:3px;">見積総額（円）</div>
+            <div style="font-size:16px;font-weight:700;color:var(--text);font-family:'DM Mono',monospace;">${fmtJPY(d.grandJPY)}</div>
+          </div>
+          <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 14px;">
+            <div style="font-size:10px;color:var(--text-3);font-weight:700;margin-bottom:3px;">見積総額（USD）</div>
+            <div style="font-size:16px;font-weight:700;color:var(--text);font-family:'DM Mono',monospace;">${fmtUSD(d.grandUSD)}</div>
+          </div>
+          <div style="background:var(--success-light);border-radius:var(--radius-sm);padding:10px 14px;">
+            <div style="font-size:10px;color:var(--success);font-weight:700;margin-bottom:3px;">利益（円）</div>
+            <div style="font-size:16px;font-weight:700;color:var(--success);font-family:'DM Mono',monospace;">${fmtJPY(d.profitJPY)}</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);margin-bottom:6px;">商品</div>
+          ${d.rows.map(r => {
+            const c = calcDealRow(r, d.fxRate, d.fxFee||0, d.purchaseRate||0);
+            const usdFeeVal = d.usdFee || 0;
+            const sellUSD = (c.sellJPY / d.fxRate) * (1 + usdFeeVal / 100);
+            return `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;">
+              <span>${r.name||'—'} × ${r.qty}</span>
+              <span style="font-family:'DM Mono',monospace;">${fmtJPY(c.sellJPY)} <span style="color:var(--text-3);">/ ${fmtUSD(sellUSD)}</span></span>
+            </div>`;
+          }).join('')}
+          ${d.shipping > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;"><span>送料</span><span style="font-family:'DM Mono',monospace;">${fmtJPY(d.shipping)} <span style="color:var(--text-3);">/ ${fmtUSD((d.shipping / d.fxRate) * (1 + (d.usdFee||0) / 100))}</span></span></div>` : ''}
+          <div style="font-size:11px;color:var(--text-3);margin-top:6px;">為替: 1 USD = ¥${d.fxRate} ／ 手数料: ${d.fxFee||0}% ／ 仕入値: ${d.purchaseRate}%</div>
+        </div>
+      </div>`;
+    }).join('');
 
     return `
-    <div class="card" style="margin-bottom:12px;${d.status==='cancelled'?'opacity:0.65;':''}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
-        <div style="flex:1;">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <div style="font-size:15px;font-weight:700;color:var(--navy);">${d.clientName}</div>
-            <span style="padding:2px 10px;font-size:11px;font-weight:700;border-radius:20px;background:${st.bg};color:${st.color};border:1px solid ${st.border};">${st.label}</span>
-          </div>
-          <div style="font-size:12px;color:var(--text-3);margin-top:3px;font-family:'DM Mono',monospace;">${d.qno} ｜ ${date} ${time}</div>
-          ${linked ? `<div style="font-size:11px;color:var(--accent);margin-top:3px;">👥 ${linked.name}</div>` : ''}
+      <div style="margin-bottom:24px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--navy);">
+          <div style="font-size:14px;font-weight:700;color:var(--navy);">📅 ${monthLabel}</div>
+          <div style="font-size:12px;color:var(--text-2);font-family:'DM Mono',monospace;">${groupDeals.length}件 ／ ${fmtJPY(monthTotalJPY)} / ${fmtUSD(monthTotalUSD)}</div>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-          ${statusButtons}
-          <button onclick="openDealEdit(${d.id})" style="padding:5px 14px;font-size:12px;font-weight:600;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);cursor:pointer;margin-left:4px;">編集</button>
-          <button onclick="deleteDeal(${d.id})" style="padding:5px 14px;font-size:12px;font-weight:600;border:1px solid var(--border);border-radius:var(--radius-sm);background:none;color:var(--danger);cursor:pointer;">削除</button>
-        </div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;">
-        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 14px;">
-          <div style="font-size:10px;color:var(--text-3);font-weight:700;margin-bottom:3px;">見積総額（円）</div>
-          <div style="font-size:16px;font-weight:700;color:var(--text);font-family:'DM Mono',monospace;">${fmtJPY(d.grandJPY)}</div>
-        </div>
-        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 14px;">
-          <div style="font-size:10px;color:var(--text-3);font-weight:700;margin-bottom:3px;">見積総額（USD）</div>
-          <div style="font-size:16px;font-weight:700;color:var(--text);font-family:'DM Mono',monospace;">${fmtUSD(d.grandUSD)}</div>
-        </div>
-        <div style="background:var(--success-light);border-radius:var(--radius-sm);padding:10px 14px;">
-          <div style="font-size:10px;color:var(--success);font-weight:700;margin-bottom:3px;">利益（円）</div>
-          <div style="font-size:16px;font-weight:700;color:var(--success);font-family:'DM Mono',monospace;">${fmtJPY(d.profitJPY)}</div>
-        </div>
-      </div>
-
-      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
-        <div style="font-size:11px;font-weight:700;color:var(--text-3);margin-bottom:6px;">商品</div>
-        ${d.rows.map(r => `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;">
-          <span>${r.name||'—'} × ${r.qty}</span>
-          <span style="font-family:'DM Mono',monospace;">${fmtJPY(r.cost * r.qty)}</span>
-        </div>`).join('')}
-        ${d.shipping > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;"><span>送料</span><span style="font-family:'DM Mono',monospace;">${fmtJPY(d.shipping)}</span></div>` : ''}
-        <div style="font-size:11px;color:var(--text-3);margin-top:6px;">為替: 1 USD = ¥${d.fxRate} ／ 手数料: ${d.fxFee}% ／ 仕入値: ${d.purchaseRate}%</div>
-      </div>
-    </div>`;
+        ${cards}
+      </div>`;
   }).join('');
 }
 
@@ -1643,6 +1696,146 @@ function saveDealEdit() {
 function closeDealModal() {
   document.getElementById('deal-modal-overlay').style.display = 'none';
   editingDealId = null;
+}
+
+function switchDealTab(tab) {
+  const editEl    = document.getElementById('deal-modal-body');
+  const previewEl = document.getElementById('deal-modal-preview');
+  const footerEl  = document.getElementById('deal-modal-footer');
+  const btnEdit    = document.getElementById('deal-tab-edit');
+  const btnPreview = document.getElementById('deal-tab-preview');
+  if (tab === 'edit') {
+    editEl.style.display    = 'block';
+    previewEl.style.display = 'none';
+    footerEl.style.display  = 'flex';
+    btnEdit.style.background = 'var(--navy)'; btnEdit.style.color = '#fff'; btnEdit.style.borderColor = 'var(--navy)';
+    btnPreview.style.background = '#fff'; btnPreview.style.color = 'var(--text-2)'; btnPreview.style.borderColor = 'var(--border-strong)';
+  } else {
+    editEl.style.display    = 'none';
+    previewEl.style.display = 'block';
+    footerEl.style.display  = 'none';
+    btnPreview.style.background = 'var(--navy)'; btnPreview.style.color = '#fff'; btnPreview.style.borderColor = 'var(--navy)';
+    btnEdit.style.background = '#fff'; btnEdit.style.color = 'var(--text-2)'; btnEdit.style.borderColor = 'var(--border-strong)';
+    generateDealPreview();
+  }
+}
+
+function generateDealPreview() {
+  const d = deals.find(d => d.id === editingDealId);
+  if (!d) return;
+  const { rate, pr, ship, sysRate } = getDealEditData();
+  const usdFeeVal = d.usdFee || 0;
+  const toUSD = (jpy) => (jpy / rate) * (1 + usdFeeVal / 100);
+  const fxFeeVal = d.fxFee || 0;
+
+  let ts = 0;
+  const productRows = d.rows.map((r, i) => {
+    const c = calcDealRow(r, rate, fxFeeVal, pr);
+    ts += c.sellJPY;
+    const bg0 = i%2===0?'#fff':'#F8F9FC';
+    const bg1 = i%2===0?'#F0F4FA':'#E8EEF6';
+    const unitJPY = c.sellJPY / r.qty;
+    if (r.qty > 1) {
+      return `
+        <tr style="background:${bg0}">
+          <td style="padding:9px 14px;font-size:12px;border-bottom:1px solid #e5e7eb;">${r.name||'—'}</td>
+          <td style="padding:9px 14px;text-align:right;font-size:12px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">1</td>
+          <td style="padding:9px 14px;text-align:right;font-size:12px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(unitJPY)}</td>
+          <td style="padding:9px 14px;text-align:right;font-size:12px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(unitJPY))}</td>
+        </tr>
+        <tr style="background:${bg1}">
+          <td style="padding:5px 14px 9px 28px;font-size:11px;color:#6B7280;border-bottom:1px solid #e5e7eb;">× ${r.qty} pcs</td>
+          <td style="padding:5px 14px;text-align:right;font-size:11px;color:#6B7280;border-bottom:1px solid #e5e7eb;">${r.qty}</td>
+          <td style="padding:5px 14px;text-align:right;font-size:12px;font-weight:600;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(c.sellJPY)}</td>
+          <td style="padding:5px 14px;text-align:right;font-size:12px;font-weight:600;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(c.sellJPY))}</td>
+        </tr>`;
+    } else {
+      return `<tr style="background:${bg0}">
+        <td style="padding:9px 14px;font-size:12px;border-bottom:1px solid #e5e7eb;">${r.name||'—'}</td>
+        <td style="padding:9px 14px;text-align:right;font-size:12px;border-bottom:1px solid #e5e7eb;">${r.qty}</td>
+        <td style="padding:9px 14px;text-align:right;font-size:12px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(c.sellJPY)}</td>
+        <td style="padding:9px 14px;text-align:right;font-size:12px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(c.sellJPY))}</td>
+      </tr>`;
+    }
+  }).join('');
+
+  const sysFee   = (ts + ship) * sysRate / 100;
+  const grandJPY = ts + ship + sysFee;
+  const grandUSD = toUSD(grandJPY);
+  const expiryFmt = d.expiry ? new Date(d.expiry).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) : '—';
+  const savedDate = new Date(d.savedAt).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+
+  const extraRows = [
+    ship > 0 ? `<tr style="background:#F8F9FC">
+      <td style="padding:9px 14px;font-size:12px;border-bottom:1px solid #e5e7eb;">Shipping</td>
+      <td style="border-bottom:1px solid #e5e7eb;"></td>
+      <td style="padding:9px 14px;text-align:right;font-size:12px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(ship)}</td>
+      <td style="padding:9px 14px;text-align:right;font-size:12px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(ship))}</td>
+    </tr>` : '',
+    `<tr style="background:#F8F9FC">
+      <td style="padding:9px 14px;font-size:12px;border-bottom:1px solid #e5e7eb;">${d.sysLabel||'Service Fee'}</td>
+      <td style="border-bottom:1px solid #e5e7eb;"></td>
+      <td style="padding:9px 14px;text-align:right;font-size:12px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(sysFee)}</td>
+      <td style="padding:9px 14px;text-align:right;font-size:12px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(sysFee))}</td>
+    </tr>`,
+  ].filter(Boolean).join('');
+
+  document.getElementById('deal-modal-preview').innerHTML = `
+    <div style="background:white;border:1px solid var(--border);border-radius:var(--radius);padding:28px 32px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;">
+        <div>
+          <div style="font-size:24px;font-weight:700;letter-spacing:0.04em;color:#1F3864;">QUOTATION</div>
+          <div style="font-size:11px;color:#9CA3AF;margin-top:3px;font-family:'DM Mono',monospace;">${d.qno}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:13px;font-weight:700;color:#1F3864;">${d.company||''}</div>
+          <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">Date: ${savedDate}</div>
+          <div style="font-size:11px;color:#9CA3AF;">Valid until: ${expiryFmt}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+        <div style="border-left:3px solid #1F3864;padding-left:12px;">
+          <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Bill To</div>
+          <div style="font-size:14px;font-weight:700;color:#111827;">${d.clientName}</div>
+          ${d.person ? `<div style="font-size:12px;color:#4B5563;margin-top:2px;">Attn: ${d.person}</div>` : ''}
+        </div>
+        <div style="border-left:3px solid #E5E7EB;padding-left:12px;">
+          <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Items</div>
+          <div style="font-size:13px;font-weight:600;color:#111827;">${d.rows.length} item${d.rows.length!==1?'s':''}</div>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:#1F3864;">
+            <th style="color:#fff;padding:9px 14px;text-align:left;font-size:11px;font-weight:700;">Description</th>
+            <th style="color:#fff;padding:9px 14px;text-align:right;font-size:11px;font-weight:700;">Qty</th>
+            <th style="color:#fff;padding:9px 14px;text-align:right;font-size:11px;font-weight:700;white-space:nowrap;">Price (JPY)</th>
+            <th style="color:#fff;padding:9px 14px;text-align:right;font-size:11px;font-weight:700;white-space:nowrap;">Price (USD)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${productRows}
+          <tr style="background:#F0F4F8;">
+            <td colspan="2" style="padding:8px 14px;font-size:11px;font-weight:600;color:#4B5563;border-bottom:1px solid #e5e7eb;">Subtotal</td>
+            <td style="padding:8px 14px;text-align:right;font-size:11px;font-weight:600;color:#4B5563;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(ts)}</td>
+            <td style="padding:8px 14px;text-align:right;font-size:11px;font-weight:600;color:#4B5563;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(ts))}</td>
+          </tr>
+          ${extraRows}
+        </tbody>
+        <tfoot>
+          <tr style="background:#1F3864;">
+            <td colspan="2" style="padding:11px 14px;color:#fff;font-weight:700;font-size:12px;letter-spacing:0.04em;">TOTAL</td>
+            <td style="padding:11px 14px;text-align:right;color:#fff;font-weight:700;font-size:14px;font-family:'DM Mono',monospace;">${fmtJPY(grandJPY)}</td>
+            <td style="padding:11px 14px;text-align:right;color:#fff;font-weight:700;font-size:14px;font-family:'DM Mono',monospace;">${fmtUSD(grandUSD)}</td>
+          </tr>
+        </tfoot>
+      </table>
+      <div style="margin-top:14px;font-size:10px;color:#9CA3AF;border-top:1px solid #E5E7EB;padding-top:12px;line-height:1.8;">
+        * All prices are quoted in Japanese Yen (JPY) and US Dollar (USD).<br>
+        * This quotation is valid until ${expiryFmt}.
+      </div>
+    </div>
+  `;
 }
 
 // ── LOCALSTORAGE 自動保存 ──
