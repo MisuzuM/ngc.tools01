@@ -607,6 +607,7 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
         <div id="deal-modal-body"></div>
         <div style="display:flex;gap:10px;margin-top:20px;">
           <button onclick="closeDealModal()" style="flex:1;padding:10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-family:inherit;font-size:13px;cursor:pointer;">キャンセル</button>
+          <button onclick="previewDealEdit()" style="flex:1;padding:10px;border:1px solid var(--accent);border-radius:var(--radius-sm);background:var(--accent-light);color:var(--accent);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">📄 見積書プレビュー</button>
           <button onclick="saveDealEdit()" style="flex:2;padding:10px;background:var(--navy);color:#fff;border:none;border-radius:var(--radius-sm);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">保存する</button>
         </div>
       </div>
@@ -615,15 +616,11 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
     <!-- Shipping -->
     <div class="page" id="page-shipping">
       <div class="page-title">発送管理</div>
-
-      <!-- サマリーバー -->
       <div class="metrics" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
         <div class="metric"><div class="m-label">総件数</div><div class="m-val" id="sh-total">0</div><div class="m-sub">件</div></div>
         <div class="metric" style="border-color:#F59E0B;"><div class="m-label" style="color:#B45309;">準備中</div><div class="m-val" id="sh-preparing" style="color:#D97706;">0</div><div class="m-sub">件</div></div>
         <div class="metric" style="border-color:#9CA3AF;"><div class="m-label" style="color:#6B7280;">発送済</div><div class="m-val" id="sh-shipped" style="color:#6B7280;">0</div><div class="m-sub">件</div></div>
       </div>
-
-      <!-- フィルター＋追加 -->
       <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center;flex-wrap:wrap;">
         <div class="search-wrap" style="margin:0;flex:1;min-width:180px;">
           <span class="search-icon">🔍</span>
@@ -637,7 +634,6 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
         </select>
         <button class="export-btn" style="width:auto;padding:10px 18px;white-space:nowrap;" onclick="openShippingModal()">＋ 発送を追加</button>
       </div>
-
       <div id="sh-list"></div>
     </div>
 
@@ -1075,23 +1071,13 @@ function filterCustomers() {
   );
   const el = document.getElementById('customerList');
   if (!list.length) { el.innerHTML='<div class="no-results">該当する顧客が見つかりません</div>'; return; }
-  el.innerHTML = list.map(c=>{
-    // この顧客の発送データを取得
-    const cShippings = shippings.filter(s => s.customer === c.name && s.status !== 'キャンセル');
-    const shTag = cShippings.length ? cShippings.map(s => {
-      const st = SH_STATUS_STYLES[s.status] || SH_STATUS_STYLES['準備中'];
-      return `<span style="display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${st.bg};color:${st.color};border:1px solid ${st.border};">
-        🚚 ${s.status}${s.carrier?' · '+s.carrier:''}${s.tracking?' · <span style="font-family:\'DM Mono\',monospace;">'+s.tracking+'</span>':''}
-      </span>`;
-    }).join(' ') : '';
-    return `
+  el.innerHTML = list.map(c=>`
     <div class="customer-item ${openId===c.id?'open':''}" id="ci-${c.id}">
       <div class="customer-top" onclick="toggleC(${c.id})">
         <div class="avatar">${initials(c.name)}</div>
         <div style="flex:1">
           <div class="c-name">${c.name}</div>
           <div class="c-meta">${c.country} ／ ${c.type} ／ ${c.lang}</div>
-          ${shTag ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;">${shTag}</div>` : ''}
         </div>
         <div style="display:flex;gap:6px;align-items:center;" onclick="event.stopPropagation()">
           <button onclick="openEditModal(${c.id})" style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;color:var(--text-2);">編集</button>
@@ -1108,26 +1094,13 @@ function filterCustomers() {
           <div class="dl" style="grid-column:1/-1"><dt>住所</dt><dd>${c.address}</dd></div>
           ${c.note?`<div class="dl" style="grid-column:1/-1"><dt>備考</dt><dd>${c.note}</dd></div>`:''}
         </div>
-        ${cShippings.length ? `
-        <div class="history-label" style="margin-top:12px;">発送状況</div>
-        ${cShippings.map(s=>{
-          const st2 = SH_STATUS_STYLES[s.status]||SH_STATUS_STYLES['準備中'];
-          return `<div style="display:flex;gap:10px;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border);color:var(--text-2);align-items:center;flex-wrap:wrap;">
-            <span style="padding:1px 8px;border-radius:12px;font-size:10px;font-weight:700;background:${st2.bg};color:${st2.color};border:1px solid ${st2.border};white-space:nowrap;">${s.status}</span>
-            <span style="flex:1;">${s.item}</span>
-            ${s.carrier?`<span style="color:var(--text-3);">🚚 ${s.carrier}</span>`:''}
-            ${s.tracking?`<span style="font-family:'DM Mono',monospace;color:var(--accent);">${s.tracking}</span>`:''}
-            ${s.date?`<span style="color:var(--text-3);min-width:80px;">${s.date}</span>`:''}
-          </div>`;
-        }).join('')}` : ''}
-        <div class="history-label" style="margin-top:12px;">取引履歴</div>
+        <div class="history-label">取引履歴</div>
         ${c.history.length
           ? c.history.map(h=>`<div class="history-entry"><span class="h-date">${h.date}</span><span>${h.note}</span></div>`).join('')
           : '<div style="font-size:12px;color:var(--text-3);padding:6px 0;">取引履歴なし</div>'
         }
       </div>
-    </div>`;
-  }).join('');
+    </div>`).join('');
 }
 
 function toggleC(id) { openId = openId===id?null:id; filterCustomers(); }
@@ -1580,25 +1553,12 @@ function setDealStatus(id, status) {
   if (!d) return;
   const prev = d.status;
   d.status = d.status === status ? 'none' : status;
-
-  // ① 支払い済みになったら発送管理に自動追加（重複チェックあり）
   if (d.status === 'paid' && prev !== 'paid') {
     const alreadyExists = shippings.some(s => s.dealId === d.id);
     if (!alreadyExists) {
       const itemNames = d.rows.map(r => r.name || '—').join('、');
-      shippings.push({
-        id: shippingId++,
-        dealId: d.id,
-        customer: d.clientName,
-        item: itemNames,
-        date: new Date().toISOString().slice(0,10),
-        status: '準備中',
-        carrier: '',
-        tracking: '',
-        note: d.memo || '',
-      });
+      shippings.push({ id: shippingId++, dealId: d.id, customer: d.clientName, item: itemNames, date: new Date().toISOString().slice(0,10), status: '準備中', carrier: '', tracking: '', note: d.memo || '' });
       saveToStorage();
-      // トースト通知
       showToast(`📦 "${d.clientName}" を発送管理に追加しました`);
     }
   }
@@ -1776,6 +1736,155 @@ function saveDealEdit() {
   renderDealSummary();
 }
 
+function previewDealEdit() {
+  const d = deals.find(d => d.id === editingDealId);
+  if (!d) return;
+
+  // 編集内容を反映（モーダルを閉じずに）
+  const { rate, fxFee, pr, ship, sysRate } = getDealEditData();
+  d.clientName   = document.getElementById('de-client').value || d.clientName;
+  d.person       = document.getElementById('de-person').value;
+  d.memo         = document.getElementById('de-memo').value;
+  d.fxRate       = rate;
+  d.purchaseRate = pr;
+  d.shipping     = ship;
+  d.sysFeeRate   = sysRate;
+  saveToStorage();
+  const usdFee   = fxFee;
+  const toUSD    = (jpy) => (jpy / rate) * (1 + usdFee / 100);
+  const sysLabel = d.sysLabel || 'Service Fee';
+
+  const today     = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const expiry    = new Date(d.savedAt);
+  expiry.setDate(expiry.getDate() + 30);
+  const expiryFmt = expiry.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const qno       = d.qno;
+
+  const td = (txt, right=false, bold=false) =>
+    `<td style="padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;${right?'text-align:right;font-family:\'DM Mono\',monospace;':''}${bold?'font-weight:600;':''}">${txt}</td>`;
+
+  let ts = 0;
+  const productRows = d.rows.map((r, i) => {
+    const costBase   = r.cost * r.qty;
+    const costWithPR = costBase * (1 + pr / 100);
+    const withFx     = costWithPR * (1 + fxFee / 100);
+    const sellJPY    = r.profit < 100 ? withFx / (1 - r.profit / 100) : withFx;
+    ts += sellJPY;
+    const unitJPY = sellJPY / r.qty;
+    const unitUSD = toUSD(unitJPY);
+    const bg0 = i%2===0?'#fff':'#F8F9FC';
+    const bg1 = i%2===0?'#F0F4FA':'#E8EEF6';
+    if (r.qty > 1) {
+      return `
+        <tr style="background:${bg0}">
+          ${td(r.name||'—')}${td(fmtJPY(unitJPY),true)}${td(fmtUSD(unitUSD),true)}${td('1',true)}${td(fmtJPY(unitJPY),true,true)}${td(fmtUSD(unitUSD),true,true)}
+        </tr>
+        <tr style="background:${bg1}">
+          <td style="padding:6px 14px 10px 28px;font-size:12px;color:#6B7280;border-bottom:1px solid #e5e7eb;">× ${r.qty} pcs</td>
+          <td style="border-bottom:1px solid #e5e7eb;"></td>
+          <td style="border-bottom:1px solid #e5e7eb;"></td>
+          <td style="padding:6px 14px 10px;text-align:right;font-size:12px;color:#6B7280;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${r.qty}</td>
+          <td style="padding:6px 14px 10px;text-align:right;font-size:13px;font-weight:600;color:#111827;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(sellJPY)}</td>
+          <td style="padding:6px 14px 10px;text-align:right;font-size:13px;font-weight:600;color:#111827;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(sellJPY))}</td>
+        </tr>`;
+    } else {
+      return `<tr style="background:${bg0}">${td(r.name||'—')}${td(fmtJPY(unitJPY),true)}${td(fmtUSD(unitUSD),true)}${td(r.qty,true)}${td(fmtJPY(sellJPY),true,true)}${td(fmtUSD(toUSD(sellJPY)),true,true)}</tr>`;
+    }
+  }).join('');
+
+  const shipping  = d.shipping || 0;
+  const sysFee    = (ts + shipping) * sysRate / 100;
+  const grandJPY  = ts + shipping + sysFee;
+  const grandUSD  = toUSD(grandJPY);
+  const subtotalJPY = ts;
+  const subtotalUSD = toUSD(ts);
+
+  const extraRows = [
+    shipping > 0 ? `<tr style="background:#F8F9FC">
+      <td style="padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;">Shipping</td>
+      <td colspan="3" style="border-bottom:1px solid #e5e7eb;"></td>
+      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(shipping)}</td>
+      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(shipping))}</td>
+    </tr>` : '',
+    sysFee > 0 ? `<tr style="background:#F8F9FC">
+      <td style="padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;">${sysLabel}</td>
+      <td colspan="3" style="border-bottom:1px solid #e5e7eb;"></td>
+      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(sysFee)}</td>
+      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(sysFee))}</td>
+    </tr>` : '',
+  ].filter(Boolean).join('');
+
+  document.getElementById('quote-preview').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px;">
+      <div>
+        <div style="font-size:32px;font-weight:700;letter-spacing:0.04em;color:#1F3864;">QUOTATION</div>
+        <div style="font-size:12px;color:#9CA3AF;margin-top:4px;font-family:'DM Mono',monospace;">No. ${qno}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:15px;font-weight:700;color:#1F3864;">${d.company||''}</div>
+        <div style="font-size:12px;color:#9CA3AF;margin-top:4px;">Date: ${today}</div>
+        <div style="font-size:12px;color:#9CA3AF;">Valid until: ${expiryFmt}</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:32px;">
+      <div style="border-left:3px solid #1F3864;padding-left:14px;">
+        <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Bill To</div>
+        <div style="font-size:15px;font-weight:700;color:#111827;">${d.clientName}</div>
+        ${d.person ? `<div style="font-size:13px;color:#4B5563;margin-top:3px;">Attn: ${d.person}</div>` : ''}
+      </div>
+      <div style="border-left:3px solid #E5E7EB;padding-left:14px;">
+        <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Items</div>
+        <div style="font-size:14px;font-weight:600;color:#111827;">${d.rows.length} item${d.rows.length!==1?'s':''}</div>
+        <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">Valid until: ${expiryFmt}</div>
+      </div>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:#1F3864;">
+          <th style="color:#fff;padding:11px 14px;text-align:left;font-size:12px;font-weight:700;letter-spacing:0.04em;">Description</th>
+          <th style="color:#fff;padding:11px 14px;text-align:right;font-size:12px;font-weight:700;white-space:nowrap;">Unit Price (JPY)</th>
+          <th style="color:#fff;padding:11px 14px;text-align:right;font-size:12px;font-weight:700;white-space:nowrap;">Unit Price (USD)</th>
+          <th style="color:#fff;padding:11px 14px;text-align:right;font-size:12px;font-weight:700;white-space:nowrap;">Qty</th>
+          <th style="color:#fff;padding:11px 14px;text-align:right;font-size:12px;font-weight:700;white-space:nowrap;">Total (JPY)</th>
+          <th style="color:#fff;padding:11px 14px;text-align:right;font-size:12px;font-weight:700;white-space:nowrap;">Total (USD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${productRows}
+        <tr style="background:#F0F4F8;">
+          <td colspan="4" style="padding:9px 14px;font-size:12px;font-weight:600;color:#4B5563;border-bottom:1px solid #e5e7eb;">Subtotal</td>
+          <td style="padding:9px 14px;text-align:right;font-size:12px;font-weight:600;color:#4B5563;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(subtotalJPY)}</td>
+          <td style="padding:9px 14px;text-align:right;font-size:12px;font-weight:600;color:#4B5563;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(subtotalUSD)}</td>
+        </tr>
+        ${extraRows}
+      </tbody>
+      <tfoot>
+        <tr style="background:#1F3864;">
+          <td colspan="4" style="padding:13px 14px;color:#fff;font-weight:700;font-size:13px;letter-spacing:0.04em;">TOTAL</td>
+          <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtJPY(grandJPY)}</td>
+          <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtUSD(grandUSD)}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div style="margin-top:20px;font-size:11px;color:#9CA3AF;border-top:1px solid #E5E7EB;padding-top:14px;line-height:1.9;">
+      * All prices are quoted in Japanese Yen (JPY) and US Dollar (USD).<br>
+      * This quotation is valid until ${expiryFmt}.
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;margin-top:32px;">
+      <div style="text-align:center;border:1.5px solid #1F3864;border-radius:4px;padding:12px 32px;min-width:130px;">
+        <div style="font-size:9px;font-weight:700;color:#1F3864;letter-spacing:0.1em;margin-bottom:2px;">AUTHORIZED</div>
+        <div style="height:44px;"></div>
+      </div>
+    </div>
+  `;
+  closeDealModal();
+  showPage('quote');
+}
+
 function closeDealModal() {
   document.getElementById('deal-modal-overlay').style.display = 'none';
   editingDealId = null;
@@ -1787,14 +1896,14 @@ let shippingId = 1;
 let editingShippingId = null;
 
 const SH_STATUS_STYLES = {
-  '準備中':   { bg:'#FEF3C7', color:'#D97706', border:'#F59E0B' },
-  '発送済':   { bg:'#E5E7EB', color:'#6B7280', border:'#9CA3AF' },
+  '準備中':    { bg:'#FEF3C7', color:'#D97706', border:'#F59E0B' },
+  '発送済':    { bg:'#E5E7EB', color:'#6B7280', border:'#9CA3AF' },
   'キャンセル': { bg:'#FEE2E2', color:'#DC2626', border:'#EF4444' },
 };
 
 function renderShipping() {
-  const q   = (document.getElementById('sh-search')?.value || '').toLowerCase();
-  const sf  = document.getElementById('sh-status-filter')?.value || '';
+  const q  = (document.getElementById('sh-search')?.value || '').toLowerCase();
+  const sf = document.getElementById('sh-status-filter')?.value || '';
   const list = document.getElementById('sh-list');
   if (!list) return;
 
@@ -1804,28 +1913,21 @@ function renderShipping() {
     return matchQ && matchSt;
   });
 
-  // サマリー更新
   document.getElementById('sh-total').textContent     = shippings.length;
   document.getElementById('sh-preparing').textContent = shippings.filter(s=>s.status==='準備中').length;
   document.getElementById('sh-shipped').textContent   = shippings.filter(s=>s.status==='発送済').length;
 
-  if (!items.length) {
-    list.innerHTML = '<div class="no-results">📦 発送データがありません</div>';
-    return;
-  }
+  if (!items.length) { list.innerHTML = '<div class="no-results">📦 発送データがありません</div>'; return; }
 
-  // 日付降順
   items = items.slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
 
   list.innerHTML = items.map(s => {
     const st = SH_STATUS_STYLES[s.status] || SH_STATUS_STYLES['準備中'];
-    const isShipped    = s.status === '発送済';
-    const isCancelled  = s.status === 'キャンセル';
-    const dimmed       = isShipped || isCancelled;
+    const dimmed = s.status === '発送済' || s.status === 'キャンセル';
     const cust = customers.find(c => c.name === s.customer);
     const flag = cust ? ` <span style="font-size:11px;color:var(--text-3);">${cust.country}</span>` : '';
     return `
-    <div style="background:var(--surface);border:1px solid ${dimmed?'#E5E7EB':' var(--border)'};border-radius:var(--radius);padding:16px 20px;margin-bottom:10px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;box-shadow:var(--shadow);opacity:${dimmed?'0.55':'1'};transition:opacity 0.2s;">
+    <div style="background:var(--surface);border:1px solid ${dimmed?'#E5E7EB':'var(--border)'};border-radius:var(--radius);padding:16px 20px;margin-bottom:10px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;box-shadow:var(--shadow);opacity:${dimmed?'0.55':'1'};transition:opacity 0.2s;">
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;">👤 ${s.customer}${flag}</div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
@@ -1840,8 +1942,7 @@ function renderShipping() {
         ${s.note ? `<div style="margin-top:6px;font-size:12px;color:var(--text-3);">📝 ${s.note}</div>` : ''}
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
-        <select onchange="quickUpdateShStatus(${s.id}, this.value)"
-          style="padding:5px 8px;border:1px solid ${st.border};border-radius:20px;font-size:11px;font-weight:700;background:${st.bg};color:${st.color};cursor:pointer;font-family:inherit;">
+        <select onchange="quickUpdateShStatus(${s.id}, this.value)" style="padding:5px 8px;border:1px solid ${st.border};border-radius:20px;font-size:11px;font-weight:700;background:${st.bg};color:${st.color};cursor:pointer;font-family:inherit;">
           ${['準備中','発送済','キャンセル'].map(opt=>`<option value="${opt}"${opt===s.status?' selected':''}>${opt}</option>`).join('')}
         </select>
         <button onclick="openShippingModal(${s.id})" style="padding:5px 12px;font-size:11px;font-weight:700;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--bg);color:var(--text-2);cursor:pointer;font-family:inherit;">編集</button>
@@ -1858,13 +1959,9 @@ function quickUpdateShStatus(id, newStatus) {
 
 function openShippingModal(id = null) {
   editingShippingId = id;
-  // 顧客リストをセット
   const sel = document.getElementById('sh-m-customer');
   sel.innerHTML = customers.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-
-  // 今日の日付をデフォルト
   const today = new Date().toISOString().slice(0,10);
-
   if (id) {
     const s = shippings.find(s => s.id === id);
     document.getElementById('sh-modal-title').textContent = '発送を編集';
@@ -1896,24 +1993,21 @@ function saveShipping() {
   const customer = document.getElementById('sh-m-customer').value;
   const item     = document.getElementById('sh-m-item').value.trim();
   if (!item) { alert('商品名を入力してください'); return; }
-
   const data = {
     customer,
     item,
     date:     document.getElementById('sh-m-date').value,
     status:   document.getElementById('sh-m-status').value,
-    carrier:  document.getElementById('sh-m-carrier').value.trim(),
+    carrier:  document.getElementById('sh-m-carrier').value,
     tracking: document.getElementById('sh-m-tracking').value.trim(),
     note:     document.getElementById('sh-m-note').value.trim(),
   };
-
   if (editingShippingId) {
     const s = shippings.find(s => s.id === editingShippingId);
     Object.assign(s, data);
   } else {
     shippings.push({ id: shippingId++, ...data });
   }
-
   closeShippingModal();
   saveToStorage();
   renderShipping();
@@ -1950,8 +2044,8 @@ function loadFromStorage() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return false;
     const data = JSON.parse(raw);
-    if (data.deals)     { deals     = data.deals;     dealId  = data.dealId  || deals.length; }
-    if (data.customers) { customers = data.customers; nextId  = data.nextId  || customers.length + 1; }
+    if (data.deals)     { deals     = data.deals;     dealId     = data.dealId     || deals.length; }
+    if (data.customers) { customers = data.customers; nextId     = data.nextId     || customers.length + 1; }
     if (data.shippings) { shippings = data.shippings; shippingId = data.shippingId || shippings.length + 1; }
     return true;
   } catch(e) { console.warn('読み込み失敗:', e); return false; }
