@@ -1536,6 +1536,7 @@ function renderDeals() {
             <div style="font-size:15px;font-weight:700;color:var(--navy);">${d.clientName}</div>
             <span style="padding:2px 10px;font-size:11px;font-weight:700;border-radius:20px;background:${st.bg};color:${st.color};border:1px solid ${st.border};">${st.label}</span>
           </div>
+          ${d.memo ? `<div style="font-size:12px;color:var(--text-2);margin-top:3px;">📝 ${d.memo}</div>` : ''}
           <div style="font-size:12px;color:var(--text-3);margin-top:3px;font-family:'DM Mono',monospace;">${d.qno} ｜ ${date} ${time}</div>
           ${linked ? `<div style="font-size:11px;color:var(--accent);margin-top:3px;">👥 ${linked.name}</div>` : ''}
         </div>
