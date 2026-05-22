@@ -1178,13 +1178,13 @@ function calcTotals() {
 
 function updateSummary() {
   const { tc, ts, tu, shipping, sysFee, grandJPY, grandUSD, rate, usdFee } = calcTotals();
-  // 利益＝各商品の利益率分のみ（仕入値・送料・手数料を含まない純粋な利益率の金額）
+  // 利益＝卸売価格（USD換算手数料なし）− 仕入れ原価
   let pj = 0;
   rows.forEach(r => {
     const c = calcRow(r);
-    pj += c.sellJPY * (r.profit / 100);
+    pj += c.sellJPY - c.costTotal;
   });
-  const pu = pj / rate * (1 + (usdFee||0) / 100);
+  const pu = pj / rate;
   const label = document.getElementById('sysFeeLabel').value || 'システム利用料';
   document.getElementById('s-items').textContent = rows.length;
   document.getElementById('s-cost').textContent = fmtJPY(tc);
@@ -1402,10 +1402,10 @@ function saveDeal() {
   const sysLabel   = document.getElementById('sysFeeLabel').value || 'システム利用料';
   const sysFeeRate = gv('sysFeeRate');
 
-  // 利益＝各商品の利益率分のみ
+  // 利益＝卸売価格（USD換算手数料なし）− 仕入れ原価
   let profitJPY = 0;
-  rows.forEach(r => { const c = calcRow(r); profitJPY += c.sellJPY * (r.profit / 100); });
-  const profitUSD = profitJPY / rate * (1 + (usdFee||0) / 100);
+  rows.forEach(r => { const c = calcRow(r); profitJPY += c.sellJPY - c.costTotal; });
+  const profitUSD = profitJPY / rate;
 
   // 顧客マッチング（部分一致）
   const matched = customers.find(c => c.name.toLowerCase().includes(client.toLowerCase()) || client.toLowerCase().includes(c.name.toLowerCase()));
@@ -1418,7 +1418,7 @@ function saveDeal() {
     company,
     customerId: matched ? matched.id : null,
     fxRate: gv('fxRate'),
-    fxFee: 0,
+    fxFee: gv('usdFee'),
     usdFee: gv('usdFee'),
     purchaseRate: gv('purchaseRate'),
     shipping,
@@ -1537,10 +1537,10 @@ function renderDeals() {
 
       <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
         <div style="font-size:11px;font-weight:700;color:var(--text-3);margin-bottom:6px;">商品</div>
-        ${d.rows.map(r => `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;">
+        ${d.rows.map(r => { const c = calcDealRow(r, d.fxRate, d.fxFee ?? 0, d.purchaseRate ?? 0); return `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;">
           <span>${r.name||'—'} × ${r.qty}</span>
-          <span style="font-family:'DM Mono',monospace;">${fmtJPY(r.cost * r.qty)}</span>
-        </div>`).join('')}
+          <span style="font-family:'DM Mono',monospace;">${fmtJPY(c.sellJPY)}</span>
+        </div>`; }).join('')}
         ${d.shipping > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;"><span>送料</span><span style="font-family:'DM Mono',monospace;">${fmtJPY(d.shipping)}</span></div>` : ''}
         <div style="font-size:11px;color:var(--text-3);margin-top:6px;">為替: 1 USD = ¥${d.fxRate} ／ 手数料: ${d.fxFee}% ／ 仕入値: ${d.purchaseRate}%</div>
       </div>
@@ -1622,6 +1622,10 @@ function openDealEdit(id) {
         <div style="font-size:12px;color:var(--text-2);padding:6px 8px;">${d.sysLabel}（%）</div>
         <input type="number" id="de-sysfee" value="${d.sysFeeRate}" oninput="refreshDealEdit()" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" />
       </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:6px;margin-bottom:6px;align-items:center;">
+        <div style="font-size:12px;color:var(--text-2);padding:6px 8px;">USD換算手数料（%）<span style="font-size:10px;color:var(--text-3);margin-left:4px;">ドル換算時に加算</span></div>
+        <input type="number" id="de-fxfee" value="${d.fxFee ?? 0}" step="0.1" oninput="refreshDealEdit()" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" />
+      </div>
     </div>
 
     <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">商品リスト</div>
@@ -1646,7 +1650,7 @@ function openDealEdit(id) {
 function getDealEditData() {
   const d = deals.find(d => d.id === editingDealId);
   const rate    = parseFloat(document.getElementById('de-rate').value)    || d.fxRate;
-  const fxFee   = d.fxFee;
+  const fxFee   = parseFloat(document.getElementById('de-fxfee').value)  ?? (d.fxFee ?? 0);
   const pr      = parseFloat(document.getElementById('de-pr').value)      || 0;
   const ship    = parseFloat(document.getElementById('de-shipping').value) || 0;
   const sysRate = parseFloat(document.getElementById('de-sysfee').value)  || 0;
@@ -1668,10 +1672,12 @@ function refreshDealEdit() {
   const { rate, fxFee, pr, ship, sysRate } = getDealEditData();
   let tc=0, ts=0, tu=0;
   d.rows.forEach(r => { const c=calcDealRow(r,rate,fxFee,pr); tc+=c.costBase; ts+=c.sellJPY; tu+=c.sellUSD; });
+  let ts_noFee=0;
+  d.rows.forEach(r => { const c=calcDealRow(r,rate,0,pr); ts_noFee+=c.sellJPY; });
   const sysFee   = (ts + ship) * sysRate / 100;
   const grandJPY = ts + ship + sysFee;
-  const grandUSD = grandJPY / rate;
-  const profitJPY = ts - tc;
+  const grandUSD = (grandJPY / rate) * (1 + fxFee / 100);
+  const profitJPY = ts_noFee - tc;
   document.getElementById('de-summary').innerHTML =
     `商品小計: <strong>${fmtJPY(ts)}</strong> &nbsp;／&nbsp; 送料: <strong>${fmtJPY(ship)}</strong> &nbsp;／&nbsp; 手数料: <strong>${fmtJPY(sysFee)}</strong><br>
      <span style="color:var(--navy);font-weight:700;">見積総額: ${fmtJPY(grandJPY)} / ${fmtUSD(grandUSD)}</span> &nbsp;&nbsp;
@@ -1718,17 +1724,21 @@ function saveDealEdit() {
   d.person     = document.getElementById('de-person').value;
   d.memo       = document.getElementById('de-memo').value;
   d.fxRate     = rate;
+  d.fxFee      = fxFee;
   d.purchaseRate = pr;
   d.shipping   = ship;
   d.sysFeeRate = sysRate;
 
   let tc=0, ts=0, tu=0;
   d.rows.forEach(r => { const c=calcDealRow(r,rate,fxFee,pr); tc+=c.costBase; ts+=c.sellJPY; tu+=c.sellUSD; });
+  // 利益用の卸売価格はfxFee=0で再計算
+  let ts_noFee=0;
+  d.rows.forEach(r => { const c=calcDealRow(r,rate,0,pr); ts_noFee+=c.sellJPY; });
   const sysFee   = (ts + ship) * sysRate / 100;
   d.grandJPY   = ts + ship + sysFee;
-  d.grandUSD   = d.grandJPY / rate;
-  d.profitJPY  = ts - tc;
-  d.profitUSD  = tu - tc / rate;
+  d.grandUSD   = (d.grandJPY / rate) * (1 + fxFee / 100);
+  d.profitJPY  = ts_noFee - tc;
+  d.profitUSD  = d.profitJPY / rate;
   d.totalCost  = tc;
 
   closeDealModal();
@@ -1746,6 +1756,7 @@ function previewDealEdit() {
   d.person       = document.getElementById('de-person').value;
   d.memo         = document.getElementById('de-memo').value;
   d.fxRate       = rate;
+  d.fxFee        = fxFee;
   d.purchaseRate = pr;
   d.shipping     = ship;
   d.sysFeeRate   = sysRate;
