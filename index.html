@@ -582,6 +582,9 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
           <span class="search-icon">🔍</span>
           <input type="text" id="dealSearch" placeholder="顧客名・商品名で検索..." oninput="renderDeals()" />
         </div>
+        <select id="dealMonthFilter" onchange="renderDeals()" style="padding:9px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;background:var(--surface);color:var(--text);">
+          <option value="">すべての月</option>
+        </select>
         <select id="dealCustomerFilter" onchange="renderDeals()" style="padding:9px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;background:var(--surface);color:var(--text);">
           <option value="">すべての顧客</option>
         </select>
@@ -1144,6 +1147,7 @@ function calcRow(r) {
 
 function fmtJPY(n){ return '¥' + Math.ceil(n).toLocaleString('ja-JP'); }
 function fmtUSD(n){ return '$' + (Math.round(n * 100) / 100).toFixed(2); }
+function fmtUSDCeil(n){ return '$' + (Math.ceil(n * 100) / 100).toFixed(2); }
 
 function renderTable() {
   document.getElementById('productBody').innerHTML = rows.map(r=>{
@@ -1166,10 +1170,10 @@ function calcTotals() {
   const rate    = gv('fxRate') || 155;
   const usdFee  = gv('usdFee');
   let tc=0, ts=0, tu=0;
-  rows.forEach(r=>{ const c=calcRow(r); tc+=c.costTotal; ts+=c.sellJPY; tu+=c.sellUSD; });
+  rows.forEach(r=>{ const c=calcRow(r); tc+=c.costTotal; ts+=Math.ceil(c.sellJPY); tu+=c.sellUSD; });
   const shipping   = gv('shipping');
   const sysFeeRate = gv('sysFeeRate') / 100;
-  const sysFee     = (ts + shipping) * sysFeeRate;
+  const sysFee     = Math.ceil((ts + shipping) * sysFeeRate);
   const grandJPY   = ts + shipping + sysFee;
   // USD換算手数料は商品代・送料・手数料すべてに適用
   const grandUSD   = (grandJPY / rate) * (1 + usdFee / 100);
@@ -1178,11 +1182,11 @@ function calcTotals() {
 
 function updateSummary() {
   const { tc, ts, tu, shipping, sysFee, grandJPY, grandUSD, rate, usdFee } = calcTotals();
-  // 利益＝卸売価格（USD換算手数料なし）− 仕入れ原価
+  // 利益＝卸売価格（切り上げ済み）− 仕入れ原価
   let pj = 0;
   rows.forEach(r => {
     const c = calcRow(r);
-    pj += c.sellJPY - c.costTotal;
+    pj += Math.ceil(c.sellJPY) - c.costTotal;
   });
   const pu = pj / rate;
   const label = document.getElementById('sysFeeLabel').value || 'システム利用料';
@@ -1285,9 +1289,14 @@ function generateQuote() {
     }
   }).join('');
 
-  // Subtotal・shipping・sysFeeのUSDにも手数料を適用
-  const subtotalJPY = ts;
+  // Subtotalは各行の表示金額（切り上げ済み）の合計に揃える
+  const subtotalJPY = rows.reduce((s, r) => s + Math.ceil(calcRow(r).sellJPY), 0);
   const subtotalUSD = toUSD(subtotalJPY);
+  // sysFee・grandJPY も切り上げ済みsubtotalから再計算
+  const sysFeeRate2 = gv('sysFeeRate') / 100;
+  const sysFee2     = Math.ceil((subtotalJPY + shipping) * sysFeeRate2);
+  const grandJPY2   = subtotalJPY + shipping + sysFee2;
+  const grandUSD2   = toUSD(grandJPY2);
 
   const extraRows = [
     shipping > 0 ? `<tr style="background:#F8F9FC">
@@ -1299,8 +1308,8 @@ function generateQuote() {
     `<tr style="background:#F8F9FC">
       <td style="padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;">${sysLabel}</td>
       <td colspan="3" style="border-bottom:1px solid #e5e7eb;"></td>
-      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(sysFee)}</td>
-      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(sysFee))}</td>
+      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(sysFee2)}</td>
+      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(sysFee2))}</td>
     </tr>`,
   ].filter(Boolean).join('');
 
@@ -1368,8 +1377,8 @@ function generateQuote() {
       <tfoot>
         <tr style="background:#1F3864;">
           <td colspan="4" style="padding:13px 14px;color:#fff;font-weight:700;font-size:13px;letter-spacing:0.04em;">TOTAL</td>
-          <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtJPY(grandJPY)}</td>
-          <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtUSD(grandUSD)}</td>
+          <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtJPY(grandJPY2)}</td>
+          <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtUSDCeil(grandUSD2)}</td>
         </tr>
       </tfoot>
     </table>
@@ -1472,14 +1481,17 @@ function renderDealSummary() {
 
 function renderDeals() {
   updateDealCustomerFilter();
+  updateDealMonthFilter();
   const q   = (document.getElementById('dealSearch').value || '').toLowerCase();
   const cf  = document.getElementById('dealCustomerFilter').value;
   const sf  = document.getElementById('dealStatusFilter').value;
+  const mf  = document.getElementById('dealMonthFilter').value;
   const filtered = deals.filter(d => {
     const matchQ  = !q || d.clientName.toLowerCase().includes(q) || d.rows.some(r => r.name.toLowerCase().includes(q));
     const matchCF = !cf || d.clientName === cf;
     const matchSF = !sf || d.status === sf;
-    return matchQ && matchCF && matchSF;
+    const matchMF = !mf || d.savedAt.slice(0, 7) === mf;
+    return matchQ && matchCF && matchSF && matchMF;
   }).slice().reverse();
 
   const el = document.getElementById('dealList');
@@ -1492,7 +1504,7 @@ function renderDeals() {
     cancelled: { label: 'キャンセル', bg: '#FEF2F2', color: '#DC2626', border: '#FECACA' },
   };
 
-  el.innerHTML = filtered.map(d => {
+  const dealCard = d => {
     const date   = new Date(d.savedAt).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
     const time   = new Date(d.savedAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
     const linked = d.customerId ? customers.find(c=>c.id===d.customerId) : null;
@@ -1500,7 +1512,6 @@ function renderDeals() {
     const statusButtons = Object.entries(statusCfg).filter(([k])=>k!=='none').map(([k,v])=>
       `<button onclick="setDealStatus(${d.id},'${k}')" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid ${v.border};border-radius:20px;background:${d.status===k?v.bg:'#fff'};color:${v.color};cursor:pointer;">${v.label}</button>`
     ).join('');
-
     return `
     <div class="card" style="margin-bottom:12px;${d.status==='cancelled'?'opacity:0.65;':''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
@@ -1519,7 +1530,6 @@ function renderDeals() {
           <button onclick="deleteDeal(${d.id})" style="padding:5px 14px;font-size:12px;font-weight:600;border:1px solid var(--border);border-radius:var(--radius-sm);background:none;color:var(--danger);cursor:pointer;">削除</button>
         </div>
       </div>
-
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;">
         <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 14px;">
           <div style="font-size:10px;color:var(--text-3);font-weight:700;margin-bottom:3px;">見積総額（円）</div>
@@ -1534,18 +1544,64 @@ function renderDeals() {
           <div style="font-size:16px;font-weight:700;color:var(--success);font-family:'DM Mono',monospace;">${fmtJPY(d.profitJPY)}</div>
         </div>
       </div>
-
       <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
         <div style="font-size:11px;font-weight:700;color:var(--text-3);margin-bottom:6px;">商品</div>
-        ${d.rows.map(r => { const c = calcDealRow(r, d.fxRate, d.fxFee ?? 0, d.purchaseRate ?? 0); return `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;">
+        ${d.rows.map(r => { const c = calcDealRow(r, d.fxRate, 0, d.purchaseRate ?? 0); return `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;">
           <span>${r.name||'—'} × ${r.qty}</span>
-          <span style="font-family:'DM Mono',monospace;">${fmtJPY(c.sellJPY)}</span>
+          <span style="font-family:'DM Mono',monospace;">${fmtJPY(Math.ceil(c.sellJPY))}</span>
         </div>`; }).join('')}
         ${d.shipping > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;"><span>送料</span><span style="font-family:'DM Mono',monospace;">${fmtJPY(d.shipping)}</span></div>` : ''}
         <div style="font-size:11px;color:var(--text-3);margin-top:6px;">為替: 1 USD = ¥${d.fxRate} ／ 手数料: ${d.fxFee}% ／ 仕入値: ${d.purchaseRate}%</div>
       </div>
     </div>`;
+  };
+
+  // 月を指定している場合はそのままリスト表示
+  if (mf) {
+    el.innerHTML = filtered.map(dealCard).join('');
+    return;
+  }
+
+  // 月ごとにグループ化して表示
+  const groups = {};
+  filtered.forEach(d => {
+    const ym = d.savedAt.slice(0, 7);
+    if (!groups[ym]) groups[ym] = [];
+    groups[ym].push(d);
+  });
+
+  el.innerHTML = Object.entries(groups).map(([ym, groupDeals]) => {
+    const [year, month] = ym.split('-');
+    const label      = `${year}年${parseInt(month)}月`;
+    const monthJPY   = groupDeals.reduce((s, d) => s + (d.grandJPY || 0), 0);
+    const monthUSD   = groupDeals.reduce((s, d) => s + (d.grandUSD || 0), 0);
+    const monthProfit = groupDeals.reduce((s, d) => s + (d.profitJPY || 0), 0);
+    return `
+      <div style="margin-bottom:28px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--navy);">
+          <div style="font-size:15px;font-weight:700;color:var(--navy);">📅 ${label}</div>
+          <div style="font-size:12px;color:var(--text-2);font-family:'DM Mono',monospace;">${groupDeals.length}件</div>
+          <div style="margin-left:auto;display:flex;gap:16px;font-size:12px;font-family:'DM Mono',monospace;">
+            <span style="color:var(--text-2);">${fmtJPY(monthJPY)}</span>
+            <span style="color:var(--text-2);">${fmtUSD(monthUSD)}</span>
+            <span style="color:var(--success);font-weight:700;">利益 ${fmtJPY(monthProfit)}</span>
+          </div>
+        </div>
+        ${groupDeals.map(dealCard).join('')}
+      </div>`;
   }).join('');
+}
+
+function updateDealMonthFilter() {
+  const sel = document.getElementById('dealMonthFilter');
+  if (!sel) return;
+  const current = sel.value;
+  const months = [...new Set(deals.map(d => d.savedAt.slice(0, 7)))].sort().reverse();
+  sel.innerHTML = '<option value="">すべての月</option>' +
+    months.map(ym => {
+      const [year, month] = ym.split('-');
+      return `<option value="${ym}" ${current === ym ? 'selected' : ''}>${year}年${parseInt(month)}月</option>`;
+    }).join('');
 }
 
 function setDealStatus(id, status) {
@@ -1774,13 +1830,13 @@ function previewDealEdit() {
   const td = (txt, right=false, bold=false) =>
     `<td style="padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;${right?'text-align:right;font-family:\'DM Mono\',monospace;':''}${bold?'font-weight:600;':''}">${txt}</td>`;
 
-  let ts = 0;
+  let subtotalJPY = 0;
   const productRows = d.rows.map((r, i) => {
     const costBase   = r.cost * r.qty;
     const costWithPR = costBase * (1 + pr / 100);
-    const withFx     = costWithPR * (1 + fxFee / 100);
-    const sellJPY    = r.profit < 100 ? withFx / (1 - r.profit / 100) : withFx;
-    ts += sellJPY;
+    const sellJPYRaw = r.profit < 100 ? costWithPR / (1 - r.profit / 100) : costWithPR;
+    const sellJPY    = Math.ceil(sellJPYRaw);
+    subtotalJPY += sellJPY;
     const unitJPY = sellJPY / r.qty;
     const unitUSD = toUSD(unitJPY);
     const bg0 = i%2===0?'#fff':'#F8F9FC';
@@ -1804,11 +1860,10 @@ function previewDealEdit() {
   }).join('');
 
   const shipping  = d.shipping || 0;
-  const sysFee    = (ts + shipping) * sysRate / 100;
-  const grandJPY  = ts + shipping + sysFee;
+  const sysFee    = Math.ceil((subtotalJPY + shipping) * sysRate / 100);
+  const grandJPY  = subtotalJPY + shipping + sysFee;
   const grandUSD  = toUSD(grandJPY);
-  const subtotalJPY = ts;
-  const subtotalUSD = toUSD(ts);
+  const subtotalUSD = toUSD(subtotalJPY);
 
   const extraRows = [
     shipping > 0 ? `<tr style="background:#F8F9FC">
@@ -1875,7 +1930,7 @@ function previewDealEdit() {
         <tr style="background:#1F3864;">
           <td colspan="4" style="padding:13px 14px;color:#fff;font-weight:700;font-size:13px;letter-spacing:0.04em;">TOTAL</td>
           <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtJPY(grandJPY)}</td>
-          <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtUSD(grandUSD)}</td>
+          <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtUSDCeil(grandUSD)}</td>
         </tr>
       </tfoot>
     </table>
