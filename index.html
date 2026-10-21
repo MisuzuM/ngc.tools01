@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>業務アプリ — 顧客管理 & 利益計算</title>
+<title>見積もり計算アプリ（リアルタイム共有版）</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -251,6 +251,13 @@ table.ptbl td input:focus { outline: none; border-color: var(--accent); backgrou
   font-family: inherit;
 }
 .add-btn:hover { background: var(--accent-light); }
+.ig textarea { width: 100%; padding: 8px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; background: var(--surface); color: var(--text); resize: vertical; line-height: 1.5; }
+.ig textarea:focus { outline: none; border-color: var(--accent); }
+.sheet-btn { width: 100%; margin-top: 8px; padding: 8px; font-size: 12px; font-weight: 600; border: 1px solid var(--success); border-radius: var(--radius-sm); background: var(--success-light); color: var(--success); cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.sheet-btn:hover { filter: brightness(0.97); }
+#sheet-panel { margin-top: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); }
+#sheet-select { flex: 1; min-width: 280px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; background: var(--surface); color: var(--text); }
+#sheet-select option:disabled { color: #B0B4BB; }
 
 /* Summary metrics */
 .metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
@@ -294,6 +301,9 @@ table.ptbl td input:focus { outline: none; border-color: var(--accent); backgrou
   border-radius: var(--radius);
   padding: 40px 48px;
   box-shadow: var(--shadow-md);
+}
+@media print {
+  #quote-preview { box-shadow: none !important; border: none !important; border-radius: 0 !important; }
 }
 
 .q-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; }
@@ -359,48 +369,110 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
 .print-btn.secondary { background: white; color: var(--navy); }
 .print-btn.secondary:hover { background: var(--accent-light); }
 
+svg.ic { width: 1em; height: 1em; vertical-align: -0.125em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#ig-purchase, #ig-usdfee { transition: opacity 0.15s; }
+
 @keyframes pulse {
   0%,100% { opacity:1; }
   50%      { opacity:0.6; }
 }
+
+/* ── 取引カード（確定・ピン留め・並べ替え・レート表示） ── */
+.deal-card { transition: box-shadow .15s, opacity .15s; }
+.deal-card.is-confirmed { border-left: 4px solid var(--success); }
+.deal-card.is-pinned { background: #F3FCFE; border-color: #A5E4F0; }
+.deal-card.is-confirmed.is-pinned { border-left-color: var(--success); }
+.deal-card.dragging { opacity: .4; }
+.deal-card.drop-before { box-shadow: 0 -3px 0 0 var(--accent); }
+.deal-card.drop-after  { box-shadow: 0 3px 0 0 var(--accent); }
+.deal-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; font-size:11px; font-weight:600; border:1px solid var(--border-strong); border-radius:20px; background:#fff; cursor:pointer; font-family:inherit; line-height:1.5; }
+.deal-act { display:inline-flex; align-items:center; gap:4px; padding:5px 12px; font-size:12px; font-weight:600; border:1px solid var(--border-strong); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); cursor:pointer; font-family:inherit; }
+.deal-act:hover, .deal-chip:hover { filter: brightness(0.97); }
+.badge-confirmed { display:inline-flex; align-items:center; gap:3px; padding:2px 10px; font-size:11px; font-weight:700; border-radius:20px; background:var(--success); color:#fff; }
+.deal-move { display:flex; flex-direction:column; align-items:center; gap:3px; padding-top:2px; }
+.deal-move button { width:24px; height:20px; border:1px solid var(--border); border-radius:4px; background:#fff; color:var(--text-2); font-size:9px; cursor:pointer; line-height:1; }
+.deal-move button:disabled { opacity:.3; cursor:default; }
+.drag-handle { cursor:grab; color:var(--text-3); display:flex; padding:2px 0; font-size:16px; }
+.fx-pill { display:inline-flex; align-items:center; gap:5px; margin-top:5px; padding:2px 10px; font-size:11px; border-radius:20px; background:var(--accent-light); color:var(--navy); font-family:'DM Mono',monospace; }
+.fx-pill .fx-date { font-family:'Noto Sans JP',sans-serif; color:var(--text-2); }
+.mini-btn { display:inline-flex; align-items:center; gap:3px; margin-left:6px; padding:1px 8px; font-size:10px; font-weight:700; border:1px solid var(--accent); border-radius:12px; background:var(--accent-light); color:var(--accent); cursor:pointer; font-family:inherit; letter-spacing:0; }
+.mini-btn:disabled { opacity:.5; cursor:wait; }
+.deal-section-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; padding-bottom:8px; border-bottom:2px solid var(--navy); font-size:15px; font-weight:700; color:var(--navy); }
+.deal-section-head.pinned { border-bottom-color:#0891B2; color:#0E7490; }
+#de-rows input { min-width:0; width:100%; }
+.deal-section-head .cnt { font-size:12px; font-weight:400; color:var(--text-2); font-family:'DM Mono',monospace; }
+.order-pill { display:inline-flex; align-items:center; gap:8px; margin-top:6px; margin-left:6px; padding:3px 6px 3px 12px; font-size:12px; border-radius:20px; background:#EEF2FF; color:var(--navy); border:1px solid #C7D2FE; }
+.order-pill strong { font-family:'DM Mono',monospace; letter-spacing:.02em; }
+.order-pill button { padding:1px 9px; font-size:10px; font-weight:700; border:1px solid #A5B4FC; border-radius:12px; background:#fff; color:var(--navy); cursor:pointer; font-family:inherit; }
 </style>
 </head>
 <body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="i-calculator" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></symbol>
+  <symbol id="i-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+  <symbol id="i-trending" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></symbol>
+  <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-printer" viewBox="0 0 24 24"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.3 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+  <symbol id="i-hash" viewBox="0 0 24 24"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><line x1="12" x2="12" y1="17" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></symbol>
+  <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol>
+</svg>
 <div class="shell">
 
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-logo">
       <div class="logo-mark">Business App</div>
-      <div class="logo-name">業務管理ツール</div>
+      <div class="logo-name">見積もり計算アプリ</div>
     </div>
     <nav class="sidebar-nav">
       <div class="nav-label">メニュー</div>
       <button class="nav-item active" onclick="showPage('crm')">
-        <span class="icon">👥</span> 顧客管理
+        <span class="icon"><svg class="ic"><use href="#i-users"/></svg></span> リピーター
       </button>
       <button class="nav-item" onclick="showPage('calc')">
-        <span class="icon">🧮</span> 利益計算
+        <span class="icon"><svg class="ic"><use href="#i-calculator"/></svg></span> 利益計算
       </button>
       <button class="nav-item" onclick="showPage('quote')">
-        <span class="icon">📄</span> 見積書
+        <span class="icon"><svg class="ic"><use href="#i-file-text"/></svg></span> 見積書
       </button>
       <button class="nav-item" onclick="showPage('deals')">
-        <span class="icon">📊</span> 取引履歴
+        <span class="icon"><svg class="ic"><use href="#i-chart"/></svg></span> 取引履歴
+      </button>
+      <button class="nav-item" onclick="showPage('sales')">
+        <span class="icon"><svg class="ic"><use href="#i-trending"/></svg></span> 売上集計
       </button>
       <button class="nav-item" onclick="showPage('shipping')">
-        <span class="icon">🚚</span> 発送管理
+        <span class="icon"><svg class="ic"><use href="#i-truck"/></svg></span> 発送管理
       </button>
       <div class="nav-label">データ管理</div>
       <button class="nav-item" onclick="showPage('backup')">
-        <span class="icon">💾</span> バックアップ
+        <span class="icon"><svg class="ic"><use href="#i-database"/></svg></span> バックアップ
       </button>
     </nav>
     <div style="padding:12px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto;">
-      <button id="drive-sync-btn" onclick="showPage('backup')" style="display:none;width:100%;padding:8px;background:rgba(59,130,246,0.25);border:1px solid rgba(59,130,246,0.5);border-radius:var(--radius-sm);color:#93C5FD;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;animation:pulse 2s infinite;">
-        ☁️ Driveに同期する
-      </button>
-      <div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center;" id="sidebar-save-status">—</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.7);text-align:center;word-break:break-all;margin-bottom:6px;" id="sidebar-user">—</div>
+      <button onclick="doLogout()" style="width:100%;padding:7px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:var(--radius-sm);color:rgba(255,255,255,0.75);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;">ログアウト</button>
+      <div style="font-size:10px;color:rgba(255,255,255,0.35);text-align:center;" id="sidebar-save-status">—</div>
     </div>
   </aside>
 
@@ -409,10 +481,10 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
 
     <!-- CRM -->
     <div class="page active" id="page-crm">
-      <div class="page-title">顧客管理</div>
+      <div class="page-title">リピーター</div>
       <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center;">
         <div class="search-wrap" style="margin:0;flex:1;">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon"><svg class="ic"><use href="#i-search"/></svg></span>
           <input type="text" id="searchInput" placeholder="顧客名・メール・国で検索..." oninput="filterCustomers()" />
         </div>
         <button class="export-btn" style="width:auto;padding:10px 18px;white-space:nowrap;" onclick="openAddModal()">＋ 顧客を追加</button>
@@ -460,25 +532,25 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
           <div class="card-title" style="margin:0;">共通設定</div>
           <button id="settings-lock-btn" onclick="toggleSettingsLock()" style="display:flex;align-items:center;gap:6px;padding:5px 12px;font-size:12px;font-weight:700;border:1px solid var(--border-strong);border-radius:20px;background:var(--success-light);color:var(--success);cursor:pointer;font-family:inherit;transition:all 0.15s;">
-            <span id="lock-icon">🔓</span><span id="lock-label">ロックする</span>
+            <span id="lock-icon"><svg class="ic"><use href="#i-unlock"/></svg></span><span id="lock-label">ロックする</span>
           </button>
         </div>
         <div id="settings-fields" style="transition:opacity 0.2s;">
           <div class="form-row" style="grid-template-columns:repeat(4,1fr);">
-            <div class="ig"><label>USD/JPY レート</label><input type="number" id="fxRate" value="155" oninput="recalc()" /></div>
+            <div class="ig"><label style="display:flex;align-items:center;">USD/JPY レート<button type="button" class="mini-btn" id="fx-fetch-btn" onclick="fetchFxRate(true)" title="最新の為替レートを取得"><svg class="ic"><use href="#i-refresh"/></svg> 最新取得</button></label><input type="number" id="fxRate" value="155" step="1" oninput="onFxManual()" /><div id="fxRateInfo" style="font-size:10px;color:var(--text-3);margin-top:3px;line-height:1.4;">レート取得中…</div></div>
             <div class="ig"><label>デフォルト利益率（%）</label><input type="number" id="defProfit" value="30" oninput="applyDefault()" /></div>
-            <div class="ig">
+            <div class="ig" id="ig-purchase">
               <label>仕入値（%）<span style="font-size:10px;font-weight:400;color:var(--text-3);margin-left:4px;">仕入原価に上乗せ</span></label>
               <input type="number" id="purchaseRate" value="0" step="0.1" oninput="recalc()" />
             </div>
-            <div class="ig">
+            <div class="ig" id="ig-usdfee">
               <label>USD換算手数料（%）<span style="font-size:10px;font-weight:400;color:var(--text-3);margin-left:4px;">ドル換算時に加算</span></label>
               <input type="number" id="usdFee" value="0" step="0.1" oninput="recalc()" />
             </div>
           </div>
         </div>
         <div id="settings-locked-banner" style="display:none;background:var(--danger-light);border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:var(--danger);font-weight:600;margin-top:4px;">
-          🔒 設定がロックされています。変更するにはロック解除してください。
+          <svg class="ic"><use href="#i-lock"/></svg> 仕入値・USD換算手数料がロックされています。変更するにはロック解除してください。
         </div>
         <div class="fx-hint" id="fxHint">レート: 1 USD = ¥155.00 ／ 仕入値: 0% ／ USD換算手数料: 0%</div>
       </div>
@@ -503,6 +575,15 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
           </table>
         </div>
         <button class="add-btn" onclick="addRow()">＋ 商品を追加</button>
+        <button type="button" class="sheet-btn" onclick="toggleSheetPanel()"><svg class="ic"><use href="#i-file-text"/></svg> 見積もり依頼シートから引用</button>
+        <div id="sheet-panel" style="display:none;">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <select id="sheet-select" onchange="pickSheetItem(this.value)"><option value="">読み込み中…</option></select>
+            <button type="button" class="mini-btn" style="margin:0;" onclick="loadSheetItems(true)"><svg class="ic"><use href="#i-refresh"/></svg> 再読み込み</button>
+            <a class="mini-btn" style="margin:0;text-decoration:none;" id="sheet-open-link" target="_blank" rel="noopener">シートを開く</a>
+          </div>
+          <div id="sheet-status" style="font-size:11px;color:var(--text-3);margin-top:6px;line-height:1.6;"></div>
+        </div>
       </div>
 
       <div class="card">
@@ -514,13 +595,23 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
           </div>
           <div class="ig">
             <label style="display:flex;align-items:center;gap:6px;">
-              <input type="text" id="sysFeeLabel" value="システム利用料" style="flex:1;padding:3px 6px;font-size:11px;font-weight:700;border:1px dashed var(--border-strong);border-radius:4px;background:var(--bg);color:var(--text-2);" />
-              <span style="font-size:10px;color:var(--text-3);white-space:nowrap;">名称変更可</span>
+              <input type="text" id="sysFeeLabel" value="PayPal fee" oninput="updateSummary()" onchange="saveFeeLabelSetting()" style="flex:1;padding:3px 6px;font-size:11px;font-weight:700;border:1px dashed var(--border-strong);border-radius:4px;background:var(--bg);color:var(--text-2);" />
+              <span style="font-size:10px;color:var(--text-3);white-space:nowrap;" title="変更すると全員の既定の名称として保存されます">名称変更可（全員に反映）</span>
             </label>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
-              <span style="font-size:12px;color:var(--text-2);">（小計＋送料）×</span>
-              <input type="number" id="sysFeeRate" value="5" step="0.1" style="width:64px;padding:7px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);" oninput="updateSummary()" />
-              <span style="font-size:12px;color:var(--text-2);">%</span>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;">
+              <select id="sysFeeMode" onchange="updateSysFeeMode()" style="padding:7px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text);">
+                <option value="rate">%で計算</option>
+                <option value="amount">金額を直接指定</option>
+              </select>
+              <span id="sysfee-rate-wrap" style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:12px;color:var(--text-2);">（小計＋送料）×</span>
+                <input type="number" id="sysFeeRate" value="5" step="0.1" style="width:64px;padding:7px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);" oninput="updateSummary()" />
+                <span style="font-size:12px;color:var(--text-2);">%</span>
+              </span>
+              <span id="sysfee-amount-wrap" style="display:none;align-items:center;gap:6px;">
+                <input type="number" id="sysFeeAmount" value="0" style="width:110px;padding:7px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);" oninput="updateSummary()" />
+                <span style="font-size:12px;color:var(--text-2);">円</span>
+              </span>
             </div>
           </div>
         </div>
@@ -545,10 +636,13 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
       <div class="card">
         <div class="card-title">見積書情報</div>
         <div class="form-row cols-2">
-          <div class="ig"><label>宛先（会社名）</label><input type="text" id="q-client" placeholder="例：Francesco De Finis" /></div>
-          <div class="ig"><label>担当者名</label><input type="text" id="q-person" placeholder="例：Attn: Sales Dept." /></div>
-          <div class="ig"><label>自社名</label><input type="text" id="q-company" placeholder="例：Your Company Name" /></div>
+          <div class="ig"><label>宛先（会社名）<span style="font-size:10px;font-weight:400;color:var(--text-3);margin-left:4px;">既存のお客様は入力中に候補が出ます</span></label><input type="text" id="q-client" list="customer-names" placeholder="例：Francesco De Finis" /><datalist id="customer-names"></datalist></div>
+          <div class="ig"><label>自社名</label><input type="text" id="q-company" value="Ninja Genuine Craft" placeholder="例：Ninja Genuine Craft" /></div>
           <div class="ig"><label>有効期限</label><input type="date" id="q-expiry" /></div>
+          <div class="ig"><label>配送会社<span style="font-size:10px;font-weight:400;color:var(--text-3);margin-left:4px;">社内メモ・見積書には載りません</span></label><input type="text" id="q-carrier" list="carrier-list" placeholder="例：DHL" /><datalist id="carrier-list"><option value="DHL"></option><option value="EMS"></option><option value="FedEx"></option><option value="ヤマト運輸"></option><option value="佐川急便"></option></datalist></div>
+          <div class="ig"><label>荷物の大きさ<span style="font-size:10px;font-weight:400;color:var(--text-3);margin-left:4px;">社内メモ・見積書には載りません</span></label><input type="text" id="q-pkgsize" placeholder="例：60サイズ／3辺合計120cm" /></div>
+          <div class="ig" style="grid-column:1/-1"><label>社内メモ（追記事項）<span style="font-size:10px;font-weight:400;color:var(--text-3);margin-left:4px;">見積書には載りません</span></label><input type="text" id="q-memo" placeholder="例：値引き交渉中、次回リピート予定 など" /></div>
+          <div class="ig" style="grid-column:1/-1"><label>見積書の備考（お客様に表示）<span style="font-size:10px;font-weight:400;color:var(--text-3);margin-left:4px;">見積書の下部に「Remarks」として載ります。品番変更・欠品（入荷日あり）のパーツを引用すると自動で追記されます</span></label><textarea id="q-remarks" rows="3" placeholder="例：Part number change: ..."></textarea></div>
         </div>
         <button class="export-btn" onclick="generateQuote()">見積書を作成して確認する →</button>
       </div>
@@ -558,8 +652,8 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
     <div class="page" id="page-quote">
       <div class="page-title no-print">見積書プレビュー</div>
       <div class="print-controls no-print">
-        <button class="print-btn primary" onclick="window.print()">🖨️ 印刷 / PDF保存</button>
-        <button class="print-btn primary" style="background:var(--success);border-color:var(--success);" onclick="saveDeal()">💾 取引として保存</button>
+        <button class="print-btn primary" onclick="window.print()"><svg class="ic"><use href="#i-printer"/></svg> 印刷 / PDF保存</button>
+        <button class="print-btn primary" style="background:var(--success);border-color:var(--success);" onclick="saveDeal()"><svg class="ic"><use href="#i-save"/></svg> 取引として保存</button>
         <button class="print-btn secondary" onclick="showPage('calc')">← 計算に戻る</button>
       </div>
       <div id="quote-preview"></div>
@@ -569,18 +663,11 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
     <div class="page" id="page-deals">
       <div class="page-title">取引履歴</div>
 
-      <!-- Summary metrics -->
-      <div class="metrics" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
-        <div class="metric"><div class="m-label">支払済 / 総取引数</div><div class="m-val" id="d-count">0 / 0</div><div class="m-sub">支払済みのみ集計</div></div>
-        <div class="metric hl"><div class="m-label">累計売上（円）💳支払済のみ</div><div class="m-val" id="d-total-jpy">¥0</div><div class="m-sub" id="d-profit-jpy">利益 ¥0</div></div>
-        <div class="metric hl"><div class="m-label">累計売上（USD）💳支払済のみ</div><div class="m-val" id="d-total-usd">$0</div><div class="m-sub" id="d-profit-usd">利益 $0</div></div>
-      </div>
-
       <!-- Filter -->
       <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center;flex-wrap:wrap;">
         <div class="search-wrap" style="margin:0;flex:1;min-width:180px;">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="dealSearch" placeholder="顧客名・商品名で検索..." oninput="renderDeals()" />
+          <span class="search-icon"><svg class="ic"><use href="#i-search"/></svg></span>
+          <input type="text" id="dealSearch" placeholder="顧客名・商品名・番号で検索..." oninput="renderDeals()" />
         </div>
         <select id="dealMonthFilter" onchange="renderDeals()" style="padding:9px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;background:var(--surface);color:var(--text);">
           <option value="">すべての月</option>
@@ -594,23 +681,64 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
           <option value="received">受領済み</option>
           <option value="cancelled">キャンセル</option>
           <option value="none">未設定</option>
+          <option value="confirmed">確定のみ</option>
+          <option value="unconfirmed">未確定のみ</option>
         </select>
+        <select id="dealSort" onchange="onDealSortChange()" title="並び順" style="padding:9px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;background:var(--surface);color:var(--text);">
+          <option value="date-desc">並び順：新しい順</option>
+          <option value="date-asc">並び順：古い順</option>
+          <option value="confirmed">並び順：確定を上に</option>
+          <option value="amount-desc">並び順：金額の高い順</option>
+          <option value="manual">並び順：手動（ドラッグ）</option>
+        </select>
+      </div>
+      <div id="dealSortHint" style="display:none;margin:-6px 0 14px;background:var(--accent-light);border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:var(--navy);">
+        カード左の <strong>⋮⋮</strong> をドラッグするか <strong>▲▼</strong> ボタンで順番を変えられます（並び順は全員に共有されます）。ピン留めした取引は常に一番上に表示されます。
       </div>
 
       <div id="dealList"></div>
+    </div>
+
+    <!-- Sales -->
+    <div class="page" id="page-sales">
+      <div class="page-title">売上集計</div>
+      <div class="metrics" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
+        <div class="metric"><div class="m-label">支払済 / 総取引数</div><div class="m-val" id="d-count">0 / 0</div><div class="m-sub">支払済みのみ集計</div></div>
+        <div class="metric hl"><div class="m-label">累計売上（円）支払済のみ</div><div class="m-val" id="d-total-jpy">¥0</div><div class="m-sub" id="d-profit-jpy">利益 ¥0</div></div>
+        <div class="metric hl"><div class="m-label">累計売上（USD）支払済のみ</div><div class="m-val" id="d-total-usd">$0</div><div class="m-sub" id="d-profit-usd">利益 $0</div></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+          <div class="card-title" style="margin:0;">月別売上（支払い済みのみ）</div>
+          <select id="sales-sort" onchange="renderSales()" style="padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;background:var(--surface);color:var(--text);">
+            <option value="month-desc">月（新しい順）</option>
+            <option value="month-asc">月（古い順）</option>
+            <option value="jpy-desc">売上（多い順）</option>
+            <option value="jpy-asc">売上（少ない順）</option>
+          </select>
+        </div>
+        <div class="tbl-wrap">
+          <table class="ptbl">
+            <thead>
+              <tr><th>月</th><th>件数</th><th>売上（円）</th><th>売上（USD）</th><th>利益（円）</th></tr>
+            </thead>
+            <tbody id="sales-table-body"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- Deal Edit Modal -->
     <div id="deal-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center;">
       <div style="background:#fff;border-radius:12px;padding:28px 32px;width:680px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-          <div style="font-size:16px;font-weight:700;color:var(--navy);">取引を編集</div>
+          <div id="deal-modal-title" style="font-size:16px;font-weight:700;color:var(--navy);">取引を編集</div>
           <button onclick="closeDealModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-3);">✕</button>
         </div>
         <div id="deal-modal-body"></div>
         <div style="display:flex;gap:10px;margin-top:20px;">
           <button onclick="closeDealModal()" style="flex:1;padding:10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-family:inherit;font-size:13px;cursor:pointer;">キャンセル</button>
-          <button onclick="previewDealEdit()" style="flex:1;padding:10px;border:1px solid var(--accent);border-radius:var(--radius-sm);background:var(--accent-light);color:var(--accent);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">📄 見積書プレビュー</button>
+          <button onclick="previewDealEdit()" style="flex:1;padding:10px;border:1px solid var(--accent);border-radius:var(--radius-sm);background:var(--accent-light);color:var(--accent);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;"><svg class="ic"><use href="#i-file-text"/></svg> 見積書プレビュー</button>
           <button onclick="saveDealEdit()" style="flex:2;padding:10px;background:var(--navy);color:#fff;border:none;border-radius:var(--radius-sm);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">保存する</button>
         </div>
       </div>
@@ -626,7 +754,7 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
       </div>
       <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center;flex-wrap:wrap;">
         <div class="search-wrap" style="margin:0;flex:1;min-width:180px;">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon"><svg class="ic"><use href="#i-search"/></svg></span>
           <input type="text" id="sh-search" placeholder="顧客名・商品名・追跡番号で検索..." oninput="renderShipping()" />
         </div>
         <select id="sh-status-filter" onchange="renderShipping()" style="padding:9px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;background:var(--surface);color:var(--text);">
@@ -653,6 +781,7 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
             <select id="sh-m-customer" style="width:100%;padding:8px 11px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;background:var(--surface);color:var(--text);"></select>
           </div>
           <div class="ig" style="grid-column:1/-1"><label>商品名 *</label><input type="text" id="sh-m-item" placeholder="例：トヨタ モールディング 3点" /></div>
+          <div class="ig"><label>荷物の大きさ</label><input type="text" id="sh-m-size" placeholder="例：60サイズ／3辺合計120cm" /></div>
           <div class="ig"><label>発送日</label><input type="date" id="sh-m-date" /></div>
           <div class="ig">
             <label>ステータス</label>
@@ -686,10 +815,18 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
       <div class="page-title">バックアップ / データ管理</div>
 
       <div class="card" style="margin-bottom:16px;">
-        <div class="card-title">📤 エクスポート（バックアップ保存）</div>
+        <div class="card-title"><svg class="ic"><use href="#i-cloud"/></svg> リアルタイム共有について</div>
+        <p style="font-size:13px;color:var(--text-2);line-height:1.8;">
+          このバージョンでは、顧客・取引履歴・発送データはすべて<strong>クラウド（Firebase）に自動保存</strong>され、
+          ログインしている全メンバーの画面に<strong>リアルタイムで反映</strong>されます。<br>
+          ファイルのエクスポート／インポートによる共有作業は不要です。以下の機能はバックアップと旧データの取り込み用です。
+        </p>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title"><svg class="ic"><use href="#i-download"/></svg> エクスポート（バックアップ保存）</div>
         <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;line-height:1.7;">
-          現在の顧客データ・取引履歴をJSONファイルとして書き出します。<br>
-          このファイルを別の端末にインポートすることで、データを共有・引き継ぎできます。
+          現在のデータをJSONファイルとして書き出します。万一に備えて定期的なバックアップをおすすめします。
         </p>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <button onclick="exportData('all')" class="export-btn" style="flex:1;min-width:160px;">全データをエクスポート</button>
@@ -702,73 +839,23 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
       </div>
 
       <div class="card" style="margin-bottom:16px;">
-        <div class="card-title">📥 インポート（データ読み込み）</div>
+        <div class="card-title"><svg class="ic"><use href="#i-upload"/></svg> インポート（旧データの取り込み）</div>
         <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;line-height:1.7;">
-          以前エクスポートしたJSONファイルを読み込みます。<br>
-          <strong style="color:var(--danger);">⚠️ 既存データに追加されます（重複は自動スキップ）。</strong>
+          以前のバージョンでエクスポートしたJSONファイルを読み込み、<strong>クラウドに追加</strong>します（全メンバーに反映されます）。<br>
+          <strong style="color:var(--danger);">※ 既存データに追加されます（重複は自動スキップ）。</strong>
         </p>
         <div style="border:2px dashed var(--border-strong);border-radius:var(--radius);padding:28px;text-align:center;cursor:pointer;transition:background 0.15s;"
              onclick="document.getElementById('import-file').click()"
              ondragover="event.preventDefault();this.style.background='var(--accent-light)'"
              ondragleave="this.style.background=''"
              ondrop="handleFileDrop(event)">
-          <div style="font-size:28px;margin-bottom:8px;">📂</div>
+          <div style="margin-bottom:8px;color:var(--text-3);"><svg class="ic" style="width:28px;height:28px;"><use href="#i-folder"/></svg></div>
           <div style="font-size:13px;font-weight:600;color:var(--text-2);">クリックまたはドラッグ＆ドロップ</div>
           <div style="font-size:12px;color:var(--text-3);margin-top:4px;">対応形式: .json（このアプリでエクスポートしたファイル）</div>
           <input type="file" id="import-file" accept=".json" style="display:none;" onchange="importData(this)" />
         </div>
-        <div style="margin-top:12px;background:var(--bg);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;" id="import-status" style="color:var(--text-3);">
+        <div style="margin-top:12px;background:var(--bg);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;" id="import-status">
           ファイルを選択してください
-        </div>
-      </div>
-
-      <!-- Drive URL Import -->
-      <div class="card" style="margin-bottom:16px;">
-        <div class="card-title">🔗 Google Drive URLからインポート</div>
-        <p style="font-size:13px;color:var(--text-2);margin-bottom:14px;line-height:1.7;">
-          DriveにアップしたJSONファイルの共有URLを貼り付けてインポートできます。<br>
-          <strong>ファイルの共有設定を「リンクを知っている全員が閲覧可能」にしてください。</strong>
-        </p>
-        <div style="display:flex;gap:8px;align-items:stretch;">
-          <input type="text" id="drive-url-input" placeholder="https://drive.google.com/file/d/〇〇/view?usp=sharing"
-            style="flex:1;padding:9px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;color:var(--text);" />
-          <button onclick="importFromDriveUrl()" class="export-btn" style="white-space:nowrap;width:auto;padding:9px 18px;">
-            読み込む
-          </button>
-        </div>
-        <div style="margin-top:10px;font-size:11px;color:var(--text-3);line-height:1.7;">
-          💡 共有URLの取得方法: DriveでJSONファイルを右クリック →「共有」→「リンクをコピー」→ ここに貼り付け
-        </div>
-        <div style="margin-top:8px;background:var(--bg);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;display:none;" id="drive-import-status"></div>
-      </div>
-
-      <!-- Share guide -->
-      <div class="card">
-        <div class="card-title">👥 社内共有フロー（Google Drive）</div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
-          <div style="background:var(--bg);border-radius:var(--radius-sm);padding:14px;text-align:center;">
-            <div style="font-size:22px;margin-bottom:6px;">①</div>
-            <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:4px;">エクスポート</div>
-            <div style="font-size:11px;color:var(--text-2);line-height:1.6;">担当者が「全データをエクスポート」でJSONを保存</div>
-          </div>
-          <div style="background:var(--bg);border-radius:var(--radius-sm);padding:14px;text-align:center;">
-            <div style="font-size:22px;margin-bottom:6px;">②</div>
-            <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:4px;">Driveにアップ</div>
-            <div style="font-size:11px;color:var(--text-2);line-height:1.6;">チーム共有フォルダに同名ファイルで上書き保存</div>
-          </div>
-          <div style="background:var(--bg);border-radius:var(--radius-sm);padding:14px;text-align:center;">
-            <div style="font-size:22px;margin-bottom:6px;">③</div>
-            <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:4px;">URLを共有</div>
-            <div style="font-size:11px;color:var(--text-2);line-height:1.6;">DriveのファイルURLをSlackやチャットで周知（初回のみ）</div>
-          </div>
-          <div style="background:var(--accent-light);border-radius:var(--radius-sm);padding:14px;text-align:center;">
-            <div style="font-size:22px;margin-bottom:6px;">④</div>
-            <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px;">URLで同期</div>
-            <div style="font-size:11px;color:var(--text-2);line-height:1.6;">メンバーはURLを貼り付けてインポートするだけ</div>
-          </div>
-        </div>
-        <div style="background:#FEF9EC;border:1px solid #FCD34D;border-radius:var(--radius-sm);padding:12px 14px;font-size:12px;color:#92400E;line-height:1.7;">
-          ⚠️ <strong>注意：</strong>各自のローカル保存データは独立しています。取引を追加したら必ずエクスポート→Driveに上書き保存を習慣にしてください。
         </div>
       </div>
     </div>
@@ -776,85 +863,34 @@ table.q-tbl tfoot tr.profit-row td:not(:first-child) { text-align: right; }
   </main>
 </div>
 
-<script>
-// ── DATA ──
-let customers = [
-  { id:1, name:"Levi Renato Varas Veas", type:"個人", country:"チリ", lang:"スペイン語",
-    email:"levivarasveas@gmail.com", tel:"56944253899", contact:"WhatsApp", payment:"PayPal",
-    address:"Antillanca sur 611 Pudahuel Santiago de Chile Galpon 6",
-    note:"リピート2回",
-    history:[
-      {date:"2025-04-22",note:"ホンダ ウォーターカバー（19360-PCX-000）発送 / DHL / ¥17,765"},
-      {date:"2025-01-21",note:"ホンダ サイドターンランプ左右（33801-S2A-J02 他）発送 / DHL / ¥10,236"}
-    ]},
-  { id:2, name:"Francesco De Finis", type:"法人", country:"オーストラリア", lang:"英語",
-    email:"francesco.definis11@gmail.com", tel:"61412810248", contact:"WhatsApp", payment:"PayPal",
-    address:"15 Riceflower street, Vineyard NSW 2765",
-    note:"リピート3回。梱包不良で再送対応あり。",
-    history:[
-      {date:"2025-04-13",note:"トヨタ モールディング（75551-60020 他）再送品 / DHL / ¥—"},
-      {date:"2025-03-22",note:"追加送料（EMS→DHL変更差額）/ ¥11,400"},
-      {date:"2025-03-13",note:"トヨタ モールディング（75551-60020 他）/ DHL / ¥28,752。破損あり再送。"}
-    ]},
-  { id:3, name:"UAB Smart Fortune", type:"法人", country:"リトアニア", lang:"英語",
-    email:"ltu@fastparts.is", tel:"37061566066", contact:"WhatsApp", payment:"WISE",
-    address:"Sporto g. 42, LT-68108",
-    note:"リピート1回",
-    history:[
-      {date:"2025-01-26",note:"トヨタ ブレーキアクチュレーター（44050-60G80）/ DHL / ¥204,622"}
-    ]},
-  { id:4, name:"Family M. Kft.", type:"法人", country:"ハンガリー", lang:"英語",
-    email:"familym1994@icloud.hu", tel:"36709458383", contact:"WhatsApp", payment:"銀行振込",
-    address:"Nagykanizsa Kazanlk krt. 12/C 8800",
-    note:"次回の取引でディスカウントあり（中田担当）。リピート1回。",
-    history:[
-      {date:"2025-03-20",note:"送料（後決め）/ PayPal / ¥8,833"},
-      {date:"2025-01-18",note:"トヨタ インジェクターセット31点（23203-11021 他）/ DHL / ¥611,573"}
-    ]},
-  { id:5, name:"Todd Thompson", type:"法人", country:"アメリカ", lang:"英語",
-    email:"Todd@tampahybrids.com", tel:"813 241-5307", contact:"WhatsApp", payment:"PayPal",
-    address:"Tampa Hybrids 13627 N Florida Ave Tampa, FL 33613",
-    note:"リピート1回",
-    history:[
-      {date:"2025-03-31",note:"トヨタ ホイールキャップ（42603-52170）/ ¥152,755"}
-    ]},
-  { id:6, name:"Osvaldas Vildziunas", type:"個人", country:"リトアニア", lang:"英語",
-    email:"Ovildziunas@yahoo.co.uk", tel:"37062360059", contact:"WhatsApp", payment:"PayPal",
-    address:"Perkunkiemio 15-63, Vilnius, Lithuania 12119",
-    note:"リピート2回。関税対策で送料と商品代を分割請求。",
-    history:[
-      {date:"2025-04-05",note:"トヨタ シリンダーカバー（11210-30083）/ DHL / ¥21,338"},
-      {date:"2025-04-05",note:"送料 / DHL / ¥7,790（関税対策のため分割）"}
-    ]},
-  { id:7, name:"Vtec performance", type:"法人", country:"アイルランド", lang:"英語",
-    email:"—", tel:"—", contact:"Instagram", payment:"PayPal",
-    address:"—",
-    note:"Instagram経由。取引実績なし。",
-    history:[]},
-  { id:8, name:"Wenston Yap", type:"個人", country:"シンガポール", lang:"英語",
-    email:"wenstonyap@yahoo.com.sg", tel:"065 96171963", contact:"WhatsApp", payment:"PayPal",
-    address:"BLK 69, UBI ROAD 1, OXLEY BIZHUB 1, #09-30, Singapore 408731",
-    note:"リピート1回",
-    history:[
-      {date:"2025-04-11",note:"マツダ RX-7 sa22c エンジンマウント / ヤフオク代理落札 / ¥15,900（落札できず終了）"}
-    ]},
-  { id:9, name:"Alexander García Gonzalez", type:"個人", country:"スペイン", lang:"スペイン語",
-    email:"alexandergarciagonzalez94@hotmail.com", tel:"608677043", contact:"WhatsApp", payment:"PayPal",
-    address:"Santa Cruz de Tenerife el Rosario la Esperanza calle Mejeneros N°12, 38290",
-    note:"リピート1回",
-    history:[
-      {date:"2025-04-12",note:"トヨタ モールディング10点（67881-60131 他11点）/ DHL / ¥121,444"}
-    ]},
-  { id:10, name:"Kamran Akbar", type:"法人", country:"アメリカ", lang:"英語",
-    email:"mortgagelower@me.com", tel:"—", contact:"WhatsApp", payment:"PayPal",
-    address:"10884 carriage drive Rancho Cucamonga CA 91737",
-    note:"リピート1回",
-    history:[
-      {date:"2025-04-18",note:"ホンダ ブレーキパッド（43251-SL0-010 他）/ DHL / ¥223,017"}
-    ]}
-];
+<!-- ログイン画面 -->
+<div id="login-overlay" style="position:fixed;inset:0;background:var(--navy);z-index:5000;display:flex;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:36px 40px;width:380px;max-width:92vw;box-shadow:0 24px 80px rgba(0,0,0,0.35);">
+    <div style="font-size:11px;letter-spacing:0.12em;color:var(--text-3);text-transform:uppercase;margin-bottom:4px;">Business App</div>
+    <div style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:18px;">見積もり計算アプリ にログイン</div>
+    <div class="ig" style="margin-bottom:12px;"><label>メールアドレス</label><input type="email" id="login-email" placeholder="you@example.com" /></div>
+    <div class="ig" style="margin-bottom:6px;"><label>パスワード</label><input type="password" id="login-pass" onkeydown="if(event.key==='Enter')doLogin()" /></div>
+    <div id="login-error" style="display:none;font-size:12px;color:var(--danger);margin:8px 0;"></div>
+    <button onclick="doLogin()" id="login-btn" style="width:100%;margin-top:14px;padding:11px;background:var(--navy);color:#fff;border:none;border-radius:var(--radius-sm);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">ログイン</button>
+    <div style="font-size:11px;color:var(--text-3);margin-top:14px;line-height:1.7;">アカウントは管理者がFirebaseコンソールで発行します。<br>パスワードを忘れた場合は管理者に連絡してください。</div>
+  </div>
+</div>
 
-let nextId = 11;
+<!-- 初期設定が未完了の場合の案内 -->
+<div id="setup-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.97);z-index:6000;align-items:center;justify-content:center;color:#fff;">
+  <div style="max-width:560px;padding:40px;line-height:1.9;font-size:14px;">
+    <div style="font-size:20px;font-weight:700;margin-bottom:14px;">初期設定が必要です</div>
+    このファイル末尾の <code style="background:rgba(255,255,255,0.15);padding:2px 6px;border-radius:4px;">firebaseConfig</code> に、Firebaseプロジェクトの設定値がまだ貼り付けられていません。<br>
+    同じフォルダの「<strong>セットアップ手順.md</strong>」に従って設定してください（所要 約30分・無料）。
+  </div>
+</div>
+
+<script>
+// ── SVGアイコン ──
+const ic = n => '<svg class="ic"><use href="#i-' + n + '"/></svg>';
+
+// ── DATA ──（顧客・取引・発送データはログイン後にクラウドから取得）
+let customers = [];
 let openId = null;
 let editingId = null;
 let rows = [];
@@ -865,10 +901,12 @@ function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  const idx = {crm:0,calc:1,quote:2,deals:3,shipping:4,backup:5}[id];
+  const idx = {crm:0,calc:1,quote:2,deals:3,sales:4,shipping:5,backup:6}[id];
   if (idx !== undefined) document.querySelectorAll('.nav-item')[idx].classList.add('active');
-  if (id === 'deals')    { renderDeals(); renderDealSummary(); }
+  if (id === 'deals')    { renderDeals(); }
+  if (id === 'sales')    { renderSales(); renderDealSummary(); }
   if (id === 'shipping') { renderShipping(); }
+  if (id === 'calc')     { ensureFxToday(); }
 }
 
 // ── EXPORT / IMPORT ──
@@ -876,13 +914,13 @@ function exportData(type) {
   const now = new Date().toISOString().slice(0,19).replace(/[T:]/g,'-');
   let data, filename;
   if (type === 'all') {
-    data = { version: 1, exportedAt: new Date().toISOString(), deals, customers, nextId, dealId };
+    data = { version: 2, exportedAt: new Date().toISOString(), deals, customers, shippings };
     filename = `bizapp_全データ_${now}.json`;
   } else if (type === 'deals') {
-    data = { version: 1, exportedAt: new Date().toISOString(), deals, dealId };
+    data = { version: 2, exportedAt: new Date().toISOString(), deals };
     filename = `bizapp_取引履歴_${now}.json`;
   } else {
-    data = { version: 1, exportedAt: new Date().toISOString(), customers, nextId };
+    data = { version: 2, exportedAt: new Date().toISOString(), customers };
     filename = `bizapp_顧客データ_${now}.json`;
   }
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -892,7 +930,7 @@ function exportData(type) {
   URL.revokeObjectURL(url);
   const status = document.getElementById('export-status');
   const counts = type==='all' ? `顧客 ${customers.length}件・取引 ${deals.length}件` : type==='deals' ? `取引 ${deals.length}件` : `顧客 ${customers.length}件`;
-  status.textContent = `✅ エクスポート完了 — ${counts} を ${filename} に保存しました`;
+  status.textContent = `エクスポート完了 — ${counts} を ${filename} に保存しました`;
   status.style.color = 'var(--success)';
 }
 
@@ -912,17 +950,17 @@ function importData(input) {
 function processImportFile(file) {
   const status = document.getElementById('import-status');
   if (!file.name.endsWith('.json')) {
-    status.textContent = '❌ JSONファイルを選択してください'; status.style.color='var(--danger)'; return;
+    status.textContent = 'JSONファイルを選択してください'; status.style.color='var(--danger)'; return;
   }
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
       const result = mergeImportData(data);
-      status.textContent = `✅ インポート完了 — 取引 ${result.addedDeals}件・顧客 ${result.addedCustomers}件 を追加しました`;
+      status.textContent = `インポート完了 — 取引 ${result.addedDeals}件・顧客 ${result.addedCustomers}件 を追加しました`;
       status.style.color = 'var(--success)';
     } catch(err) {
-      status.textContent = '❌ ファイルの読み込みに失敗しました。'; status.style.color = 'var(--danger)';
+      status.textContent = 'ファイルの読み込みに失敗しました。'; status.style.color = 'var(--danger)';
     }
   };
   reader.readAsText(file);
@@ -933,64 +971,19 @@ function mergeImportData(data) {
   if (data.deals && Array.isArray(data.deals)) {
     const existingQnos = new Set(deals.map(d => d.qno));
     data.deals.forEach(d => {
-      if (!existingQnos.has(d.qno)) { d.id = dealId++; deals.push(d); addedDeals++; }
+      if (!existingQnos.has(d.qno)) { d.id = genId(); upsertRecord('deals', d); addedDeals++; }
     });
   }
   if (data.customers && Array.isArray(data.customers)) {
     const existingEmails = new Set(customers.map(c => c.email));
     data.customers.forEach(c => {
-      if (!existingEmails.has(c.email)) { c.id = nextId++; customers.push(c); addedCustomers++; }
+      if (!existingEmails.has(c.email)) { c.id = genId(); c.createdAt = c.createdAt || Date.now(); upsertRecord('customers', c); addedCustomers++; }
     });
   }
-  saveToStorage();
-  filterCustomers();
-  renderDeals();
-  renderDealSummary();
+  if (data.shippings && Array.isArray(data.shippings)) {
+    data.shippings.forEach(sh => { sh.id = genId(); upsertRecord('shippings', sh); });
+  }
   return { addedDeals, addedCustomers };
-}
-
-function importFromDriveUrl() {
-  const raw = document.getElementById('drive-url-input').value.trim();
-  const statusEl = document.getElementById('drive-import-status');
-  statusEl.style.display = 'block';
-  statusEl.style.color = 'var(--text-2)';
-  statusEl.textContent = '読み込み中...';
-
-  if (!raw) { statusEl.textContent = '❌ URLを入力してください'; statusEl.style.color='var(--danger)'; return; }
-
-  // DriveのURLをダウンロード用URLに変換
-  let fileId = null;
-  const m1 = raw.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  const m2 = raw.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (m1) fileId = m1[1];
-  else if (m2) fileId = m2[1];
-
-  if (!fileId) {
-    statusEl.textContent = '❌ DriveのURLが正しくありません。共有URLを貼り付けてください。';
-    statusEl.style.color = 'var(--danger)'; return;
-  }
-
-  const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-
-  fetch(downloadUrl)
-    .then(r => {
-      if (!r.ok) throw new Error('fetch failed');
-      return r.text();
-    })
-    .then(text => {
-      const data = JSON.parse(text);
-      const result = mergeImportData(data);
-      statusEl.textContent = `✅ 読み込み完了 — 取引 ${result.addedDeals}件・顧客 ${result.addedCustomers}件 を追加しました`;
-      statusEl.style.color = 'var(--success)';
-      // URLを保存しておく（次回用）
-      localStorage.setItem('bizapp_drive_url', raw);
-    })
-    .catch(() => {
-      statusEl.innerHTML = `❌ 読み込みに失敗しました。以下を確認してください：<br>
-        ・Driveのファイルが「<strong>リンクを知っている全員が閲覧可能</strong>」になっているか<br>
-        ・URLが正しいか（drive.google.com/file/d/〇〇/view の形式）`;
-      statusEl.style.color = 'var(--danger)';
-    });
 }
 
 // ── MODAL ──
@@ -1041,20 +1034,18 @@ function saveCustomer() {
     note: document.getElementById('m-note').value||''
   };
   if (editingId !== null) {
-    const idx = customers.findIndex(c=>c.id===editingId);
-    customers[idx] = {...customers[idx], ...data};
+    const cur = customers.find(c=>c.id===editingId);
+    upsertRecord('customers', {...cur, ...data});
   } else {
-    customers.push({id: nextId++, history:[], ...data});
+    upsertRecord('customers', {id: genId(), createdAt: Date.now(), history:[], ...data});
   }
   closeModal();
-  filterCustomers();
 }
 
 function deleteCustomer(id) {
   if (!confirm('この顧客を削除しますか？')) return;
-  customers = customers.filter(c=>c.id!==id);
   if (openId===id) openId=null;
-  filterCustomers();
+  removeRecord('customers', id);
 }
 
 // ── CRM ──
@@ -1076,15 +1067,15 @@ function filterCustomers() {
   if (!list.length) { el.innerHTML='<div class="no-results">該当する顧客が見つかりません</div>'; return; }
   el.innerHTML = list.map(c=>`
     <div class="customer-item ${openId===c.id?'open':''}" id="ci-${c.id}">
-      <div class="customer-top" onclick="toggleC(${c.id})">
+      <div class="customer-top" onclick="toggleC('${c.id}')">
         <div class="avatar">${initials(c.name)}</div>
         <div style="flex:1">
           <div class="c-name">${c.name}</div>
           <div class="c-meta">${c.country} ／ ${c.type} ／ ${c.lang}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;" onclick="event.stopPropagation()">
-          <button onclick="openEditModal(${c.id})" style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;color:var(--text-2);">編集</button>
-          <button onclick="deleteCustomer(${c.id})" style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;color:var(--danger);">削除</button>
+          <button onclick="openEditModal('${c.id}')" style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;color:var(--text-2);">編集</button>
+          <button onclick="deleteCustomer('${c.id}')" style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;color:var(--danger);">削除</button>
         </div>
         <span class="chevron" style="margin-left:8px;">▼</span>
       </div>
@@ -1134,15 +1125,81 @@ function updateRow(id, f, v) {
   updateSummary();
 }
 
+// ── 価格計算（全画面共通） ──
+// 単価(円)   = 原価 ×（1＋仕入値%）÷（1−利益率）を円単位で切り上げ
+// 行合計(円) = 単価 × 数量
+// 手数料(円) =（商品小計＋送料）× 手数料% を切り上げ（金額指定の場合はその金額）
+// USD       = 円 ÷ レート ×（1＋USD換算手数料%）をセント単位で四捨五入。行合計(USD)＝単価(USD)×数量
+// USD総額   = 各行（商品・送料・手数料）のUSDの合計 → 見積書の明細を足すと必ずTOTALになる
+// 利益      = 商品小計 − 原価合計（仕入値%で上乗せした分は利益に含む）
+// 旧方式（legacy）: 2026/10 の改修前に保存された取引の表示用。行ごとに合計を切り上げ、USDは総額から換算
+const ceilJ = x => Math.ceil(x - 1e-7);   // 小数計算の誤差（10000.0000000002 など）で1円上がらないように
+function usdCents(jpy, rate, fee) { return rate > 0 ? Math.round(jpy / rate * (1 + (fee || 0) / 100) * 100) : 0; }
+function priceLine(r, rate, fee, pr, legacy) {
+  const qty  = Number(r.qty) || 0;
+  const unitCost = Number(r.cost) || 0;
+  const p    = Number(r.profit) || 0;
+  const cost = unitCost * qty;
+  const costWithPR = cost * (1 + (pr || 0) / 100);
+  if (legacy) {
+    const totalJPY = Math.ceil(p < 100 ? costWithPR / (1 - p / 100) : costWithPR);
+    return { qty, cost, costWithPR, unitJPY: qty ? totalJPY / qty : 0, totalJPY, unitUSD: 0, totalUSDc: usdCents(totalJPY, rate, fee) };
+  }
+  const unitWithPR = unitCost * (1 + (pr || 0) / 100);
+  const unitJPY  = ceilJ(p < 100 ? unitWithPR / (1 - p / 100) : unitWithPR);
+  const unitUSDc = usdCents(unitJPY, rate, fee);
+  return { qty, cost, costWithPR, unitJPY, totalJPY: unitJPY * qty, unitUSD: unitUSDc / 100, totalUSDc: unitUSDc * qty };
+}
+function priceDeal(p) {
+  const rate = Number(p.rate) || 0, fee = Number(p.usdFee) || 0, pr = Number(p.pr) || 0;
+  const lines = (p.rows || []).map(r => priceLine(r, rate, fee, pr, p.legacy));
+  const subtotalJPY = lines.reduce((s, l) => s + l.totalJPY, 0);
+  const cost        = lines.reduce((s, l) => s + l.cost, 0);
+  const subUSDc     = lines.reduce((s, l) => s + l.totalUSDc, 0);
+  const ship   = Number(p.shipping) || 0;
+  const cf     = p.legacy ? Math.ceil : ceilJ;
+  const sysFee = p.sysMode === 'amount' ? cf(Number(p.sysAmount) || 0) : cf((subtotalJPY + ship) * (Number(p.sysRate) || 0) / 100);
+  const shipUSDc = ship > 0 ? usdCents(ship, rate, fee) : 0;
+  const feeUSDc  = sysFee > 0 ? usdCents(sysFee, rate, fee) : 0;
+  const grandJPY = subtotalJPY + ship + sysFee;
+  const grandUSD = p.legacy ? (rate > 0 ? grandJPY / rate * (1 + fee / 100) : 0) : (subUSDc + shipUSDc + feeUSDc) / 100;
+  return { lines, subtotalJPY, subtotalUSD: subUSDc / 100, ship, shipUSD: shipUSDc / 100, sysFee, sysFeeUSD: feeUSDc / 100,
+           grandJPY, grandUSD, cost, profitJPY: subtotalJPY - cost, profitUSD: rate > 0 ? (subtotalJPY - cost) / rate : 0 };
+}
+function calcParams() {
+  return { rows, rate: gv('fxRate') || 155, usdFee: gv('usdFee'), pr: gv('purchaseRate'), shipping: gv('shipping'),
+           sysMode: (document.getElementById('sysFeeMode') || {}).value || 'rate', sysRate: gv('sysFeeRate'), sysAmount: gv('sysFeeAmount') };
+}
+function dealPriceParams(d) {
+  return { rows: d.rows || [], rate: d.fxRate, usdFee: d.fxFee ?? 0, pr: d.purchaseRate ?? 0, shipping: d.shipping || 0,
+           sysMode: d.sysFeeMode || 'rate', sysRate: d.sysFeeRate || 0, sysAmount: d.sysFeeAmount || 0, legacy: !d.calcVer };
+}
+// 見積書の明細行（商品・送料・手数料）
+function quoteRowsHtml(P, names, sysLabel, alwaysShowFee) {
+  const cell = 'padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;';
+  const num  = cell + "text-align:right;font-family:'DM Mono',monospace;";
+  const productRows = P.lines.map((l, i) => `<tr style="background:${i % 2 === 0 ? '#fff' : '#F8F9FC'}">
+          <td style="${cell}">${names[i] || '—'}</td>
+          <td style="${num}">${fmtJPY(l.unitJPY)}</td>
+          <td style="${num}">${fmtUSD(l.unitUSD)}</td>
+          <td style="${num}">${l.qty}</td>
+          <td style="${num}font-weight:600;">${fmtJPY(l.totalJPY)}</td>
+          <td style="${num}font-weight:600;">${fmtUSD(l.totalUSDc / 100)}</td>
+        </tr>`).join('');
+  const extra = (label, jpy, usd) => `<tr style="background:#F8F9FC">
+      <td style="${cell}">${label}</td>
+      <td colspan="3" style="border-bottom:1px solid #e5e7eb;"></td>
+      <td style="${num}">${fmtJPY(jpy)}</td>
+      <td style="${num}">${fmtUSD(usd)}</td>
+    </tr>`;
+  const extraRows = (P.ship > 0 ? extra('Shipping', P.ship, P.shipUSD) : '') +
+                    ((alwaysShowFee || P.sysFee > 0) ? extra(sysLabel, P.sysFee, P.sysFeeUSD) : '');
+  return { productRows, extraRows };
+}
+
 function calcRow(r) {
-  const rate         = gv('fxRate');
-  const purchaseRate = gv('purchaseRate');
-  const usdFee       = gv('usdFee');
-  const costBase     = r.cost * r.qty;
-  const costWithPR   = costBase * (1 + purchaseRate / 100);
-  const sellJPY      = r.profit < 100 ? costWithPR / (1 - r.profit / 100) : costWithPR;
-  const sellUSD      = rate > 0 ? (sellJPY / rate) * (1 + usdFee / 100) : 0;
-  return { costTotal: costBase, withFx: costWithPR, sellJPY, sellUSD };
+  const L = priceLine(r, gv('fxRate') || 155, gv('usdFee'), gv('purchaseRate'));
+  return { costTotal: L.cost, withFx: L.costWithPR, sellJPY: L.totalJPY, sellUSD: L.totalUSDc / 100 };
 }
 
 function fmtJPY(n){ return '¥' + Math.ceil(n).toLocaleString('ja-JP'); }
@@ -1167,17 +1224,10 @@ function renderTable() {
 }
 
 function calcTotals() {
-  const rate    = gv('fxRate') || 155;
-  const usdFee  = gv('usdFee');
-  let tc=0, ts=0, tu=0;
-  rows.forEach(r=>{ const c=calcRow(r); tc+=c.costTotal; ts+=Math.ceil(c.sellJPY); tu+=c.sellUSD; });
-  const shipping   = gv('shipping');
-  const sysFeeRate = gv('sysFeeRate') / 100;
-  const sysFee     = Math.ceil((ts + shipping) * sysFeeRate);
-  const grandJPY   = ts + shipping + sysFee;
-  // USD換算手数料は商品代・送料・手数料すべてに適用
-  const grandUSD   = (grandJPY / rate) * (1 + usdFee / 100);
-  return { tc, ts, tu, shipping, sysFee, grandJPY, grandUSD, rate, usdFee };
+  const p = calcParams();
+  const P = priceDeal(p);
+  return { tc: P.cost, ts: P.subtotalJPY, tu: P.subtotalUSD, shipping: P.ship, sysFee: P.sysFee,
+           grandJPY: P.grandJPY, grandUSD: P.grandUSD, rate: p.rate, usdFee: p.usdFee };
 }
 
 function updateSummary() {
@@ -1204,6 +1254,13 @@ function updateSummary() {
   document.getElementById('hint-grand').textContent = fmtJPY(grandJPY) + ' / ' + fmtUSD(grandUSD);
 }
 
+function updateSysFeeMode() {
+  const mode = document.getElementById('sysFeeMode').value;
+  document.getElementById('sysfee-rate-wrap').style.display   = mode === 'rate'   ? 'flex' : 'none';
+  document.getElementById('sysfee-amount-wrap').style.display = mode === 'amount' ? 'flex' : 'none';
+  updateSummary();
+}
+
 function recalc() {
   const rate = gv('fxRate'), pr = gv('purchaseRate'), usdFee = gv('usdFee');
   document.getElementById('fxHint').textContent =
@@ -1215,43 +1272,38 @@ let settingsLocked = false;
 
 function toggleSettingsLock() {
   settingsLocked = !settingsLocked;
-  const inputs = ['fxRate','defProfit','purchaseRate','usdFee'].map(id => document.getElementById(id));
-  const fields  = document.getElementById('settings-fields');
-  const banner  = document.getElementById('settings-locked-banner');
-  const btn     = document.getElementById('settings-lock-btn');
-  const icon    = document.getElementById('lock-icon');
-  const lbl     = document.getElementById('lock-label');
-
+  // ロック対象は変更頻度の少ない「仕入値」「USD換算手数料」のみ
+  const inputs = ['purchaseRate','usdFee'].map(id => document.getElementById(id));
+  const wraps  = ['ig-purchase','ig-usdfee'].map(id => document.getElementById(id));
+  const banner = document.getElementById('settings-locked-banner');
+  const btn    = document.getElementById('settings-lock-btn');
+  const icon   = document.getElementById('lock-icon');
+  const lbl    = document.getElementById('lock-label');
+  inputs.forEach(el => { if (el) el.disabled = settingsLocked; });
+  wraps.forEach(el => { if (el) el.style.opacity = settingsLocked ? '0.45' : '1'; });
+  banner.style.display = settingsLocked ? 'block' : 'none';
   if (settingsLocked) {
-    inputs.forEach(el => { if(el) el.disabled = true; });
-    fields.style.opacity = '0.45';
-    fields.style.pointerEvents = 'none';
-    banner.style.display = 'block';
     btn.style.background = 'var(--danger-light)';
     btn.style.color = 'var(--danger)';
     btn.style.borderColor = 'var(--danger)';
-    icon.textContent = '🔒';
-    lbl.textContent  = 'ロック解除';
+    icon.innerHTML  = ic('lock');
+    lbl.textContent = 'ロック解除';
   } else {
-    inputs.forEach(el => { if(el) el.disabled = false; });
-    fields.style.opacity = '1';
-    fields.style.pointerEvents = '';
-    banner.style.display = 'none';
     btn.style.background = 'var(--success-light)';
     btn.style.color = 'var(--success)';
     btn.style.borderColor = 'var(--success)';
-    icon.textContent = '🔓';
-    lbl.textContent  = 'ロックする';
+    icon.innerHTML  = ic('unlock');
+    lbl.textContent = 'ロックする';
   }
 }
 
 function applyDefault() { const p=gv('defProfit'); rows.forEach(r=>r.profit=p); renderTable(); }
 
 // ── QUOTE ──
-function generateQuote() {
+async function generateQuote() {
+  await ensureFxToday();
   const client   = document.getElementById('q-client').value  || 'Customer';
-  const person   = document.getElementById('q-person').value;
-  const company  = document.getElementById('q-company').value || 'Our Company';
+  const company  = document.getElementById('q-company').value || 'Ninja Genuine Craft';
   const expiry   = document.getElementById('q-expiry').value;
   const sysLabel = document.getElementById('sysFeeLabel').value || 'Service Fee';
   const { ts, shipping, sysFee, grandJPY, grandUSD, rate } = calcTotals();
@@ -1260,62 +1312,14 @@ function generateQuote() {
 
   const today      = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
   const expiryFmt  = expiry ? new Date(expiry).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) : '—';
-  const qno        = 'Q-' + Date.now().toString().slice(-8);
+  const qno        = currentQno = nextQno();
 
   const td = (txt, right=false, bold=false) =>
     `<td style="padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;${right?'text-align:right;font-family:\'DM Mono\',monospace;':''}${bold?'font-weight:600;':''}">${txt}</td>`;
 
-  let subtotalJPY = 0;
-  const productRows = rows.map((r, i) => {
-    const sellJPYRaw = (() => {
-      const c = calcRow(r);
-      // calcRow already applies purchaseRate; we need raw cost-based calc without fxFee in JPY
-      const purchaseRate = gv('purchaseRate');
-      const costBase   = r.cost * r.qty;
-      const costWithPR = costBase * (1 + purchaseRate / 100);
-      return r.profit < 100 ? costWithPR / (1 - r.profit / 100) : costWithPR;
-    })();
-    const sellJPY = Math.ceil(sellJPYRaw);
-    subtotalJPY += sellJPY;
-    const unitJPY = sellJPY / r.qty;
-    const unitUSD = toUSD(unitJPY);
-    const bg0 = i%2===0?'#fff':'#F8F9FC';
-    const bg1 = i%2===0?'#F0F4FA':'#E8EEF6';
-    if (r.qty > 1) {
-      return `
-        <tr style="background:${bg0}">
-          <td style="padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;">${r.name||'—'}</td>
-          <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(unitJPY)}</td>
-          <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(unitUSD)}</td>
-          <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${r.qty}</td>
-          <td style="padding:10px 14px;text-align:right;font-size:13px;font-weight:600;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(sellJPY)}</td>
-          <td style="padding:10px 14px;text-align:right;font-size:13px;font-weight:600;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(sellJPY))}</td>
-        </tr>`;
-    } else {
-      return `<tr style="background:${bg0}">${td(r.name||'—')}${td(fmtJPY(unitJPY),true)}${td(fmtUSD(unitUSD),true)}${td(r.qty,true)}${td(fmtJPY(sellJPY),true,true)}${td(fmtUSD(toUSD(sellJPY)),true,true)}</tr>`;
-    }
-  }).join('');
-
-  const subtotalUSD = toUSD(subtotalJPY);
-  const sysFeeRate2 = gv('sysFeeRate') / 100;
-  const sysFee2     = Math.ceil((subtotalJPY + shipping) * sysFeeRate2);
-  const grandJPY2   = subtotalJPY + shipping + sysFee2;
-  const grandUSD2   = toUSD(grandJPY2);
-
-  const extraRows = [
-    shipping > 0 ? `<tr style="background:#F8F9FC">
-      <td style="padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;">Shipping</td>
-      <td colspan="3" style="border-bottom:1px solid #e5e7eb;"></td>
-      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(shipping)}</td>
-      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(shipping))}</td>
-    </tr>` : '',
-    `<tr style="background:#F8F9FC">
-      <td style="padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;">${sysLabel}</td>
-      <td colspan="3" style="border-bottom:1px solid #e5e7eb;"></td>
-      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(sysFee2)}</td>
-      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(sysFee2))}</td>
-    </tr>`,
-  ].filter(Boolean).join('');
+  const P = priceDeal(calcParams());
+  const { productRows, extraRows } = quoteRowsHtml(P, rows.map(r => r.name), sysLabel, true);
+  const subtotalJPY = P.subtotalJPY, subtotalUSD = P.subtotalUSD, grandJPY2 = P.grandJPY, grandUSD2 = P.grandUSD;
 
   document.getElementById('quote-preview').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px;">
@@ -1334,11 +1338,10 @@ function generateQuote() {
       <div style="border-left:3px solid #1F3864;padding-left:14px;">
         <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Bill To</div>
         <div style="font-size:15px;font-weight:700;color:#111827;">${client}</div>
-        ${person ? `<div style="font-size:13px;color:#4B5563;margin-top:3px;">Attn: ${person}</div>` : ''}
       </div>
       <div style="border-left:3px solid #E5E7EB;padding-left:14px;">
         <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Items</div>
-        <div style="font-size:14px;font-weight:600;color:#111827;">${rows.length} item${rows.length!==1?'s':''}</div>
+        <div style="font-size:14px;font-weight:600;color:#111827;">${rows.length} item${rows.length!==1?'s':''} ／ QTY ${rows.reduce((s2,r)=>s2+(r.qty||0),0)}</div>
         <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">Valid until: ${expiryFmt}</div>
       </div>
     </div>
@@ -1367,39 +1370,50 @@ function generateQuote() {
         <tr style="background:#1F3864;">
           <td colspan="4" style="padding:13px 14px;color:#fff;font-weight:700;font-size:13px;letter-spacing:0.04em;">TOTAL</td>
           <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtJPY(grandJPY2)}</td>
-          <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtUSDCeil(grandUSD2)}</td>
+          <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtUSD(grandUSD2)}</td>
         </tr>
       </tfoot>
     </table>
 
+    ${remarksHtml(document.getElementById('q-remarks').value)}
     <div style="margin-top:20px;font-size:11px;color:#9CA3AF;border-top:1px solid #E5E7EB;padding-top:14px;line-height:1.9;">
       * All prices are quoted in Japanese Yen (JPY) and US Dollar (USD).<br>
       * This quotation is valid until ${expiryFmt}.<br>
       * <strong style="color:#374151;">Any customs duties, taxes, or import fees that may arise are the sole responsibility of the buyer.</strong>
     </div>
 
-    <div style="display:flex;justify-content:flex-end;margin-top:32px;">
-      <div style="text-align:center;border:1.5px solid #1F3864;border-radius:4px;padding:12px 32px;min-width:130px;">
-        <div style="font-size:9px;font-weight:700;color:#1F3864;letter-spacing:0.1em;margin-bottom:2px;">AUTHORIZED</div>
-        <div style="height:44px;"></div>
-      </div>
-    </div>
   `;
   showPage('quote');
 }
 
 // ── DEALS ──
 let deals = [];
-let dealId = 0;
 let editingDealId = null;
+let editingDraft = null;
+let currentQno = null;
+
+// 見積番号: Q-日付-枝番（同日内で 01, 02, ... と自動連番）
+function nextQno() {
+  const t = new Date();
+  const key = 'Q-' + t.getFullYear() + String(t.getMonth() + 1).padStart(2, '0') + String(t.getDate()).padStart(2, '0');
+  let max = 0;
+  deals.forEach(d => {
+    if ((d.qno || '').startsWith(key + '-')) {
+      const n = parseInt(d.qno.slice(key.length + 1), 10);
+      if (n > max) max = n;
+    }
+  });
+  return key + '-' + String(max + 1).padStart(2, '0');
+}
 
 function saveDeal() {
   const { tc, ts, tu, shipping, sysFee, grandJPY, grandUSD, rate, usdFee } = calcTotals();
   const client     = document.getElementById('q-client').value || '（未設定）';
-  const person     = document.getElementById('q-person').value;
-  const company    = document.getElementById('q-company').value;
+  const company    = document.getElementById('q-company').value || 'Ninja Genuine Craft';
   const sysLabel   = document.getElementById('sysFeeLabel').value || 'システム利用料';
   const sysFeeRate = gv('sysFeeRate');
+  const sysFeeMode = (document.getElementById('sysFeeMode') || {}).value || 'rate';
+  const sysFeeAmount = gv('sysFeeAmount');
 
   // 利益＝卸売価格（USD換算手数料なし）− 仕入れ原価
   let profitJPY = 0;
@@ -1410,11 +1424,14 @@ function saveDeal() {
   const matched = customers.find(c => c.name.toLowerCase().includes(client.toLowerCase()) || client.toLowerCase().includes(c.name.toLowerCase()));
 
   const snapshot = {
-    id: dealId++,
+    id: genId(),
     savedAt: new Date().toISOString(),
     clientName: client,
-    person,
     company,
+    memo: document.getElementById('q-memo').value || '',
+    remarks: (document.getElementById('q-remarks').value || '').trim(),
+    pkgSize: document.getElementById('q-pkgsize').value || '',
+    carrier: document.getElementById('q-carrier').value || '',
     customerId: matched ? matched.id : null,
     fxRate: gv('fxRate'),
     fxFee: gv('usdFee'),
@@ -1422,6 +1439,8 @@ function saveDeal() {
     purchaseRate: gv('purchaseRate'),
     shipping,
     sysFeeRate,
+    sysFeeMode,
+    sysFeeAmount,
     sysLabel,
     grandJPY,
     grandUSD,
@@ -1430,23 +1449,28 @@ function saveDeal() {
     totalCost: tc,
     rows: rows.map(r => ({...r})),
     expiry: document.getElementById('q-expiry').value,
-    qno: 'Q-' + Date.now().toString().slice(-8),
+    qno: currentQno || nextQno(),
     status: 'none',
+    calcVer: 2,
+    confirmed: false,
+    pinned: false,
+    fxSource: fxMeta.source || 'manual',
+    fxFetchedAt: fxMeta.fetchedAt || new Date().toISOString(),
+    fxRateDate: fxMeta.rateDate || null,
   };
 
-  deals.push(snapshot);
-  saveToStorage();
+  upsertRecord('deals', snapshot);
+  currentQno = null;
 
   // 顧客の取引履歴にも追記
   if (matched) {
     const dateStr = new Date().toISOString().slice(0,10);
     const summary = rows.map(r => r.name).filter(Boolean).join('、');
     matched.history.unshift({ date: dateStr, note: `見積保存: ${summary} / ${fmtJPY(grandJPY)} / ${fmtUSD(grandUSD)}` });
+    upsertRecord('customers', matched);
   }
 
   alert(`「${client}」の取引を保存しました。`);
-  renderDealSummary();
-  updateDealCustomerFilter();
 }
 
 function updateDealCustomerFilter() {
@@ -1469,6 +1493,50 @@ function renderDealSummary() {
   document.getElementById('d-profit-usd').textContent = '利益 ' + fmtUSD(totalProfitUSD);
 }
 
+// 取引の手数料額（PayPal手数料等）を保存値から算出
+function dealSysFee(d) {
+  return priceDeal(dealPriceParams(d)).sysFee;
+}
+
+// ── 売上集計ページ ──
+function renderSales() {
+  const el = document.getElementById('sales-table-body');
+  if (!el) return;
+  const paid = deals.filter(d => d.status === 'paid');
+  const groups = {};
+  paid.forEach(d => {
+    const ym = (d.savedAt || '').slice(0, 7);
+    if (!ym) return;
+    if (!groups[ym]) groups[ym] = { ym, count: 0, jpy: 0, usd: 0, profit: 0 };
+    const g = groups[ym];
+    g.count++; g.jpy += d.grandJPY || 0; g.usd += d.grandUSD || 0; g.profit += d.profitJPY || 0;
+  });
+  const list = Object.values(groups);
+  const mode = document.getElementById('sales-sort') ? document.getElementById('sales-sort').value : 'month-desc';
+  if (mode === 'month-desc') list.sort((a, b) => b.ym.localeCompare(a.ym));
+  if (mode === 'month-asc')  list.sort((a, b) => a.ym.localeCompare(b.ym));
+  if (mode === 'jpy-desc')   list.sort((a, b) => b.jpy - a.jpy);
+  if (mode === 'jpy-asc')    list.sort((a, b) => a.jpy - b.jpy);
+  if (!list.length) {
+    el.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px;">支払い済みの取引がまだありません</td></tr>';
+    return;
+  }
+  el.innerHTML = list.map(g => {
+    const [y, m] = g.ym.split('-');
+    return `<tr>
+      <td style="font-weight:700;color:var(--navy);">${y}年${parseInt(m)}月</td>
+      <td class="td-r">${g.count}件</td>
+      <td class="td-r">${fmtJPY(g.jpy)}</td>
+      <td class="td-r">${fmtUSD(g.usd)}</td>
+      <td class="td-r" style="color:var(--success);font-weight:700;">${fmtJPY(g.profit)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// 手動並び順のキー（未設定の取引は保存日時が新しいほど上）
+function dealSortKey(d) { return (d && typeof d.order === 'number') ? d.order : -Date.parse((d && d.savedAt) || 0); }
+let _dealVisible = { pinned: [], rest: [] };
+
 function renderDeals() {
   updateDealCustomerFilter();
   updateDealMonthFilter();
@@ -1476,13 +1544,31 @@ function renderDeals() {
   const cf  = document.getElementById('dealCustomerFilter').value;
   const sf  = document.getElementById('dealStatusFilter').value;
   const mf  = document.getElementById('dealMonthFilter').value;
+  const sortMode = (document.getElementById('dealSort') || {}).value || 'date-desc';
+  const manual   = sortMode === 'manual';
+  const hint = document.getElementById('dealSortHint');
+  if (hint) hint.style.display = manual ? 'block' : 'none';
+
   const filtered = deals.filter(d => {
-    const matchQ  = !q || d.clientName.toLowerCase().includes(q) || d.rows.some(r => r.name.toLowerCase().includes(q));
+    const matchQ  = !q || (d.clientName || '').toLowerCase().includes(q) || (d.qno || '').toLowerCase().includes(q) || (d.orderNo || '').toLowerCase().includes(q) || (d.rows || []).some(r => (r.name || '').toLowerCase().includes(q));
     const matchCF = !cf || d.clientName === cf;
-    const matchSF = !sf || d.status === sf;
-    const matchMF = !mf || d.savedAt.slice(0, 7) === mf;
+    const matchSF = !sf || (sf === 'confirmed' ? !!d.confirmed : sf === 'unconfirmed' ? !d.confirmed : d.status === sf);
+    const matchMF = !mf || (d.savedAt || '').slice(0, 7) === mf;
     return matchQ && matchCF && matchSF && matchMF;
-  }).slice().reverse();
+  });
+
+  const byDateDesc = (a, b) => (b.savedAt || '').localeCompare(a.savedAt || '');
+  const sorters = {
+    'date-desc':   byDateDesc,
+    'date-asc':    (a, b) => (a.savedAt || '').localeCompare(b.savedAt || ''),
+    'confirmed':   (a, b) => ((b.confirmed ? 1 : 0) - (a.confirmed ? 1 : 0)) || byDateDesc(a, b),
+    'amount-desc': (a, b) => ((b.grandJPY || 0) - (a.grandJPY || 0)) || byDateDesc(a, b),
+    'manual':      (a, b) => dealSortKey(a) - dealSortKey(b),
+  };
+  filtered.sort(sorters[sortMode] || byDateDesc);
+  const pinned = filtered.filter(d => d.pinned);
+  const rest   = filtered.filter(d => !d.pinned);
+  _dealVisible = { pinned: pinned.map(d => d.id), rest: rest.map(d => d.id) };
 
   const el = document.getElementById('dealList');
   if (!filtered.length) { el.innerHTML = '<div class="no-results">保存された取引がありません</div>'; return; }
@@ -1494,30 +1580,55 @@ function renderDeals() {
     cancelled: { label: 'キャンセル', bg: '#FEF2F2', color: '#DC2626', border: '#FECACA' },
   };
 
-  const dealCard = d => {
+  const dealCard = (d, idx, arr) => {
+    const dealP = priceDeal(dealPriceParams(d));
     const date   = new Date(d.savedAt).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
     const time   = new Date(d.savedAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
     const linked = d.customerId ? customers.find(c=>c.id===d.customerId) : null;
     const st     = statusCfg[d.status] || statusCfg.none;
     const statusButtons = Object.entries(statusCfg).filter(([k])=>k!=='none').map(([k,v])=>
-      `<button onclick="setDealStatus(${d.id},'${k}')" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid ${v.border};border-radius:20px;background:${d.status===k?v.bg:'#fff'};color:${v.color};cursor:pointer;">${v.label}</button>`
+      `<button onclick="setDealStatus('${d.id}','${k}')" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid ${v.border};border-radius:20px;background:${d.status===k?v.bg:'#fff'};color:${v.color};cursor:pointer;">${v.label}</button>`
     ).join('');
+    const fxDate = fmtDateJP(d.fxFetchedAt || d.savedAt);
+    const fxKind = d.fxSource ? (d.fxSource === 'manual' ? '手入力' : '自動取得') : '保存時';
+    const dragAttrs = manual ? `draggable="true" ondragstart="dealDragStart(event,'${d.id}')" ondragover="dealDragOver(event,'${d.id}')" ondragleave="dealDragLeave(event)" ondrop="dealDrop(event,'${d.id}')" ondragend="dealDragEnd()"` : '';
+    const moveBtns = manual ? `<div class="deal-move">
+          <span class="drag-handle" title="ドラッグして移動">${ic('grip')}</span>
+          <button onclick="moveDealStep('${d.id}',-1)" ${idx===0?'disabled':''} title="1つ上へ">▲</button>
+          <button onclick="moveDealStep('${d.id}',1)" ${idx===arr.length-1?'disabled':''} title="1つ下へ">▼</button>
+        </div>` : '';
+    const cls = 'card deal-card' + (d.confirmed ? ' is-confirmed' : '') + (d.pinned ? ' is-pinned' : '');
     return `
-    <div class="card" style="margin-bottom:12px;${d.status==='cancelled'?'opacity:0.65;':''}">
+    <div class="${cls}" data-id="${d.id}" ${dragAttrs} style="margin-bottom:12px;${d.status==='cancelled'?'opacity:0.65;':''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
-        <div style="flex:1;">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        ${moveBtns}
+        <div style="flex:1;min-width:220px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            ${d.pinned ? `<span title="ピン留め中" style="color:#0891B2;display:inline-flex;">${ic('pin')}</span>` : ''}
             <div style="font-size:15px;font-weight:700;color:var(--navy);">${d.clientName}</div>
+            ${d.confirmed ? `<span class="badge-confirmed">${ic('check')} 確定</span>` : ''}
             <span style="padding:2px 10px;font-size:11px;font-weight:700;border-radius:20px;background:${st.bg};color:${st.color};border:1px solid ${st.border};">${st.label}</span>
           </div>
-          ${d.memo ? `<div style="font-size:12px;color:var(--text-2);margin-top:3px;">📝 ${d.memo}</div>` : ''}
-          <div style="font-size:12px;color:var(--text-3);margin-top:3px;font-family:'DM Mono',monospace;">${d.qno} ｜ ${date} ${time}</div>
-          ${linked ? `<div style="font-size:11px;color:var(--accent);margin-top:3px;">👥 ${linked.name}</div>` : ''}
+          ${d.memo ? `<div style="font-size:12px;color:var(--text-2);margin-top:3px;">${ic('pencil')} ${d.memo}</div>` : ''}
+          ${(d.pkgSize || d.carrier) ? `<div style="font-size:12px;color:var(--text-2);margin-top:3px;">${ic('ruler')} ${d.pkgSize || '—'} ／ ${ic('truck')} ${d.carrier || '—'}</div>` : ''}
+          <div style="font-size:12px;color:var(--text-3);margin-top:3px;font-family:'DM Mono',monospace;">${d.qno} ｜ ${date} ${time}${d.copiedFrom ? ` ｜ <span style="font-family:'Noto Sans JP',sans-serif;">コピー元 ${d.copiedFrom}</span>` : ''}</div>
+          ${d.orderNo ? `<div class="order-pill" title="発送用のオーダー番号">オーダー番号 <strong>${d.orderNo}</strong><button onclick="copyText('${d.orderNo}')">コピー</button></div>`
+            : d.status === 'paid' ? `<div class="order-pill" style="background:#fff;">オーダー番号 未発行<button onclick="openOrderModal('${d.id}')">発行する</button></div>` : ''}
+          <div class="fx-pill" title="社内用（見積書には表示されません）">${ic('trending')} 1 USD = ¥${d.fxRate} <span class="fx-date">（${fxDate} ${fxKind}）</span></div>
+          ${linked ? `<div style="font-size:11px;color:var(--accent);margin-top:3px;">${ic('users')} ${linked.name}</div>` : ''}
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-          ${statusButtons}
-          <button onclick="openDealEdit(${d.id})" style="padding:5px 14px;font-size:12px;font-weight:600;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);cursor:pointer;margin-left:4px;">編集</button>
-          <button onclick="deleteDeal(${d.id})" style="padding:5px 14px;font-size:12px;font-weight:600;border:1px solid var(--border);border-radius:var(--radius-sm);background:none;color:var(--danger);cursor:pointer;">削除</button>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+            <button class="deal-chip" onclick="toggleDealFlag('${d.id}','pinned')" title="一覧の一番上に固定" style="border-color:#0891B2;color:#0E7490;background:${d.pinned?'#CFFAFE':'#fff'};">${ic('pin')} ${d.pinned?'ピン留め中':'ピン留め'}</button>
+            <button class="deal-chip" onclick="toggleDealFlag('${d.id}','confirmed')" title="確定した取引にラベルを付ける" style="border-color:var(--success);color:${d.confirmed?'#fff':'var(--success)'};background:${d.confirmed?'var(--success)':'#fff'};">${ic('check')} 確定</button>
+            <span style="width:1px;height:18px;background:var(--border);"></span>
+            ${statusButtons}
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="deal-act" onclick="openDealEdit('${d.id}')">${ic('pencil')} 編集</button>
+            <button class="deal-act" onclick="copyDeal('${d.id}')" title="同じ内容で新しい取引を作成（レートはコピー元のまま）">${ic('copy')} コピー</button>
+            <button class="deal-act" onclick="deleteDeal('${d.id}')" style="border-color:var(--border);background:none;color:var(--danger);">削除</button>
+          </div>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;">
@@ -1536,50 +1647,61 @@ function renderDeals() {
       </div>
       <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
         <div style="font-size:11px;font-weight:700;color:var(--text-3);margin-bottom:6px;">商品</div>
-        ${d.rows.map(r => { const c = calcDealRow(r, d.fxRate, 0, d.purchaseRate ?? 0); return `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;">
+        ${d.rows.map((r, i) => { const c = { sellJPY: dealP.lines[i].totalJPY }; return `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;">
           <span>${r.name||'—'} × ${r.qty}</span>
           <span style="font-family:'DM Mono',monospace;">${fmtJPY(Math.ceil(c.sellJPY))}</span>
         </div>`; }).join('')}
         ${d.shipping > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;"><span>送料</span><span style="font-family:'DM Mono',monospace;">${fmtJPY(d.shipping)}</span></div>` : ''}
-        <div style="font-size:11px;color:var(--text-3);margin-top:6px;">為替: 1 USD = ¥${d.fxRate} ／ 手数料: ${d.fxFee}% ／ 仕入値: ${d.purchaseRate}%</div>
+        ${(() => { const fee = dealSysFee(d); return fee > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;"><span>${d.sysLabel || '手数料'}</span><span style="font-family:'DM Mono',monospace;">${fmtJPY(fee)}</span></div>` : ''; })()}
+        <div style="font-size:11px;color:var(--text-3);margin-top:6px;">為替: 1 USD = ¥${d.fxRate}（${fxDate} ${fxKind}） ／ USD換算手数料: ${d.fxFee}% ／ 仕入値: ${d.purchaseRate}%</div>
       </div>
     </div>`;
   };
 
-  // 月を指定している場合はそのままリスト表示
-  if (mf) {
-    el.innerHTML = filtered.map(dealCard).join('');
+  const head = (label, n, extraCls) => `<div class="deal-section-head ${extraCls||''}">${label}<span class="cnt">${n}件</span></div>`;
+  let html = '';
+  if (pinned.length) {
+    html += `<div style="margin-bottom:28px;">${head(ic('pin') + ' ピン留め', pinned.length, 'pinned')}${pinned.map(dealCard).join('')}</div>`;
+  }
+
+  const grouped = !mf && (sortMode === 'date-desc' || sortMode === 'date-asc');
+  if (!grouped) {
+    if (rest.length) html += (pinned.length ? head('その他の取引', rest.length) : '') + rest.map(dealCard).join('');
+    el.innerHTML = html;
     return;
   }
 
-  // 月ごとにグループ化して表示
+  // 月ごとにグループ化して表示（月の合計はピン留め分も含む）
   const groups = {};
   filtered.forEach(d => {
-    const ym = d.savedAt.slice(0, 7);
-    if (!groups[ym]) groups[ym] = [];
-    groups[ym].push(d);
+    const ym = (d.savedAt || '').slice(0, 7);
+    if (!groups[ym]) groups[ym] = { all: [], list: [] };
+    groups[ym].all.push(d);
+    if (!d.pinned) groups[ym].list.push(d);
   });
 
-  el.innerHTML = Object.entries(groups).map(([ym, groupDeals]) => {
+  html += Object.entries(groups).filter(([, g]) => g.list.length).map(([ym, g]) => {
     const [year, month] = ym.split('-');
-    const label      = `${year}年${parseInt(month)}月`;
-    const monthJPY   = groupDeals.reduce((s, d) => s + (d.grandJPY || 0), 0);
-    const monthUSD   = groupDeals.reduce((s, d) => s + (d.grandUSD || 0), 0);
-    const monthProfit = groupDeals.reduce((s, d) => s + (d.profitJPY || 0), 0);
+    const label       = `${year}年${parseInt(month)}月`;
+    const monthJPY    = g.all.reduce((s, d) => s + (d.grandJPY || 0), 0);
+    const monthUSD    = g.all.reduce((s, d) => s + (d.grandUSD || 0), 0);
+    const monthProfit = g.all.reduce((s, d) => s + (d.profitJPY || 0), 0);
+    const pinnedN     = g.all.length - g.list.length;
     return `
       <div style="margin-bottom:28px;">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--navy);">
-          <div style="font-size:15px;font-weight:700;color:var(--navy);">📅 ${label}</div>
-          <div style="font-size:12px;color:var(--text-2);font-family:'DM Mono',monospace;">${groupDeals.length}件</div>
+          <div style="font-size:15px;font-weight:700;color:var(--navy);">${ic('calendar')} ${label}</div>
+          <div style="font-size:12px;color:var(--text-2);font-family:'DM Mono',monospace;">${g.all.length}件${pinnedN ? `<span style="font-family:'Noto Sans JP',sans-serif;">（うちピン留め ${pinnedN}件）</span>` : ''}</div>
           <div style="margin-left:auto;display:flex;gap:16px;font-size:12px;font-family:'DM Mono',monospace;">
             <span style="color:var(--text-2);">${fmtJPY(monthJPY)}</span>
             <span style="color:var(--text-2);">${fmtUSD(monthUSD)}</span>
             <span style="color:var(--success);font-weight:700;">利益 ${fmtJPY(monthProfit)}</span>
           </div>
         </div>
-        ${groupDeals.map(dealCard).join('')}
+        ${g.list.map(dealCard).join('')}
       </div>`;
   }).join('');
+  el.innerHTML = html;
 }
 
 function updateDealMonthFilter() {
@@ -1597,15 +1719,21 @@ function updateDealMonthFilter() {
 function setDealStatus(id, status) {
   const d = deals.find(d => d.id === id);
   if (!d) return;
+  // 支払い済みにするときは「オーダー番号を発行します」の確認を挟む（発行済みの取引は確認なし）
+  if (status === 'paid' && d.status !== 'paid' && !d.orderNo) { openOrderModal(d.id); return; }
+  applyDealStatus(d, status);
+}
+
+function applyDealStatus(d, status) {
   const prev = d.status;
   d.status = d.status === status ? 'none' : status;
+  upsertRecord('deals', d);
   if (d.status === 'paid' && prev !== 'paid') {
     const alreadyExists = shippings.some(s => s.dealId === d.id);
     if (!alreadyExists) {
       const itemNames = d.rows.map(r => r.name || '—').join('、');
-      shippings.push({ id: shippingId++, dealId: d.id, customer: d.clientName, item: itemNames, date: new Date().toISOString().slice(0,10), status: '準備中', carrier: '', tracking: '', note: d.memo || '' });
-      saveToStorage();
-      showToast(`📦 "${d.clientName}" を発送管理に追加しました`);
+      upsertRecord('shippings', { id: genId(), dealId: d.id, customer: d.clientName, item: itemNames, date: localYMD('-'), status: '準備中', orderNo: d.orderNo || '', carrier: d.carrier || '', size: d.pkgSize || '', tracking: '', note: d.memo || '' });
+      showToast(`「${d.clientName}」を発送管理に追加しました`);
     }
   }
   renderDeals();
@@ -1628,29 +1756,57 @@ function showToast(msg) {
 
 function deleteDeal(id) {
   if (!confirm('この取引を削除しますか？')) return;
-  deals = deals.filter(d => d.id !== id);
-  renderDeals();
-  renderDealSummary();
+  removeRecord('deals', id);
 }
 
-function openDealEdit(id) {
-  const d = deals.find(d => d.id === id);
+function dealRowsHtml(d) {
+  return d.rows.map((r,i) => `
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center;">
+        <input type="text" value="${r.name}" oninput="updateDealRow(${i},'name',this.value)" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" placeholder="商品名" />
+        <input type="number" value="${r.cost}" oninput="updateDealRow(${i},'cost',this.value)" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" placeholder="原価" />
+        <input type="number" value="${r.profit}" oninput="updateDealRow(${i},'profit',this.value)" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" placeholder="利益率%" />
+        <input type="number" value="${r.qty}" oninput="updateDealRow(${i},'qty',this.value)" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" placeholder="数量" />
+        <button onclick="removeDealRow(${i})" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:14px;">✕</button>
+      </div>`).join('');
+}
+
+function openDealEdit(id, draftObj) {
+  const d = draftObj || deals.find(d => d.id === id);
   if (!d) return;
-  editingDealId = id;
+  const isCopy  = !!draftObj;
+  editingDealId = d.id;
+  editingDraft  = JSON.parse(JSON.stringify(d));
+  deFxMeta      = { source: d.fxSource || null, fetchedAt: d.fxFetchedAt || null, rateDate: d.fxRateDate || null };
+  document.getElementById('deal-modal-title').textContent = isCopy ? '取引をコピーして編集' : '取引を編集';
 
   document.getElementById('deal-modal-body').innerHTML = `
+    ${isCopy ? `<div style="background:var(--accent-light);border:1px solid #BFDBFE;border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--navy);margin-bottom:16px;line-height:1.7;">
+      <strong>${d.copiedFrom || 'コピー元'}</strong> をコピーしました（新しい番号: <strong>${d.qno}</strong>）。<br>
+      <span id="de-copy-rate">為替レートはコピー元と同じ <strong>1 USD = ¥${d.fxRate}</strong>（${fmtDateJP(d.fxFetchedAt || d.savedAt)}）のままです。</span>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0;padding:8px 12px;background:#fff;border:1px dashed #93C5FD;border-radius:6px;">
+        <span>レートを本日付にする場合はこのボタンを押してください →</span>
+        <button type="button" onclick="refreshDealRate()" style="padding:5px 14px;font-size:12px;font-weight:700;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;font-family:inherit;">本日のレートにする</button>
+      </div>
+      利益率などを調整して「保存する」を押すと、新しい取引として保存されます。キャンセルすると保存されません。
+    </div>` : ''}
+    ${!isCopy && !d.calcVer ? `<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;font-size:11px;color:var(--text-2);margin-bottom:14px;line-height:1.7;">
+      この取引は以前の計算方式で保存されています。保存または見積書プレビューをすると、新しい方式（単価を円単位で切り上げ・USDは明細の合計）で再計算されるため、金額が数円〜数セント変わることがあります。
+    </div>` : ''}
     <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">基本情報</div>
     <div class="form-row cols-2" style="margin-bottom:16px;">
-      <div class="ig"><label>宛先</label><input type="text" id="de-client" value="${d.clientName}" /></div>
-      <div class="ig"><label>担当者</label><input type="text" id="de-person" value="${d.person||''}" /></div>
-      <div class="ig" style="grid-column:1/-1"><label>メモ</label><input type="text" id="de-memo" value="${d.memo||''}" placeholder="備考・連絡事項など" /></div>
+      <div class="ig"><label>宛先</label><input type="text" id="de-client" value="${d.clientName}" list="customer-names" /></div>
+      <div class="ig"><label>配送会社（社内メモ）</label><input type="text" id="de-carrier" value="${d.carrier||''}" list="carrier-list" /></div>
+      <div class="ig"><label>荷物の大きさ（社内メモ）</label><input type="text" id="de-pkgsize" value="${d.pkgSize||''}" /></div>
+      <div class="ig"><label>メモ</label><input type="text" id="de-memo" value="${d.memo||''}" placeholder="備考・連絡事項など" /></div>
+      <div class="ig" style="grid-column:1/-1"><label>見積書の備考（お客様に表示）</label><textarea id="de-remarks" rows="2">${escHtml(d.remarks || '')}</textarea></div>
     </div>
 
     <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">費用設定</div>
     <div style="margin-bottom:16px;">
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:6px;margin-bottom:6px;align-items:center;">
-        <div style="font-size:12px;color:var(--text-2);padding:6px 8px;">為替レート（USD/JPY）</div>
-        <input type="number" id="de-rate" value="${d.fxRate}" oninput="refreshDealEdit()" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" />
+        <div style="font-size:12px;color:var(--text-2);padding:6px 8px;">為替レート（USD/JPY）<button type="button" class="mini-btn" id="de-rate-btn" onclick="refreshDealRate()"><svg class="ic"><use href="#i-refresh"/></svg> 最新レート</button>
+          <div id="de-rate-info" style="font-size:10px;color:var(--text-3);margin-top:2px;">${fxMetaText(deFxMeta, d.savedAt)}</div></div>
+        <input type="number" id="de-rate" value="${d.fxRate}" step="1" oninput="onDealRateManual()" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" />
       </div>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:6px;margin-bottom:6px;align-items:center;">
         <div style="font-size:12px;color:var(--text-2);padding:6px 8px;">仕入値（%）</div>
@@ -1665,8 +1821,19 @@ function openDealEdit(id) {
         <input type="number" id="de-shipping" value="${d.shipping}" oninput="refreshDealEdit()" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" />
       </div>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:6px;margin-bottom:6px;align-items:center;">
-        <div style="font-size:12px;color:var(--text-2);padding:6px 8px;">${d.sysLabel}（%）</div>
-        <input type="number" id="de-sysfee" value="${d.sysFeeRate}" oninput="refreshDealEdit()" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" />
+        <div style="font-size:12px;color:var(--text-2);padding:6px 8px;">手数料の名称<span style="font-size:10px;color:var(--text-3);margin-left:4px;">見積書に表示（例：PayPal fee / Wise fee）</span></div>
+        <input type="text" id="de-syslabel" value="${d.sysLabel || appSettings.feeLabel}" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" />
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:6px;margin-bottom:6px;align-items:center;">
+        <div style="font-size:12px;color:var(--text-2);padding:6px 8px;">手数料の計算方法</div>
+        <select id="de-sysmode" onchange="switchDealSysMode()" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;background:var(--surface);">
+          <option value="rate"${(d.sysFeeMode||'rate')==='rate'?' selected':''}>%で計算</option>
+          <option value="amount"${d.sysFeeMode==='amount'?' selected':''}>金額指定（円）</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:6px;margin-bottom:6px;align-items:center;">
+        <div style="font-size:12px;color:var(--text-2);padding:6px 8px;">手数料（% または 円）</div>
+        <input type="number" id="de-sysfee" value="${(d.sysFeeMode||'rate')==='amount' ? (d.sysFeeAmount||0) : (d.sysFeeRate||0)}" oninput="refreshDealEdit()" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" />
       </div>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:6px;margin-bottom:6px;align-items:center;">
         <div style="font-size:12px;color:var(--text-2);padding:6px 8px;">USD換算手数料（%）<span style="font-size:10px;color:var(--text-3);margin-left:4px;">ドル換算時に加算</span></div>
@@ -1676,14 +1843,7 @@ function openDealEdit(id) {
 
     <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">商品リスト</div>
     <div id="de-rows">
-      ${d.rows.map((r,i) => `
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center;">
-        <input type="text" value="${r.name}" oninput="updateDealRow(${i},'name',this.value)" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" placeholder="商品名" />
-        <input type="number" value="${r.cost}" oninput="updateDealRow(${i},'cost',this.value)" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" placeholder="原価" />
-        <input type="number" value="${r.profit}" oninput="updateDealRow(${i},'profit',this.value)" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" placeholder="利益率%" />
-        <input type="number" value="${r.qty}" oninput="updateDealRow(${i},'qty',this.value)" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" placeholder="数量" />
-        <button onclick="removeDealRow(${i})" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:14px;">✕</button>
-      </div>`).join('')}
+      ${dealRowsHtml(editingDraft)}
     </div>
     <button onclick="addDealRow()" style="font-size:12px;color:var(--accent);background:none;border:1px dashed var(--accent);border-radius:4px;padding:5px 14px;cursor:pointer;width:100%;margin-top:4px;">＋ 商品を追加</button>
 
@@ -1694,35 +1854,35 @@ function openDealEdit(id) {
 }
 
 function getDealEditData() {
-  const d = deals.find(d => d.id === editingDealId);
+  const d = editingDraft;
   const rate    = parseFloat(document.getElementById('de-rate').value)    || d.fxRate;
   const fxFee   = parseFloat(document.getElementById('de-fxfee').value)  ?? (d.fxFee ?? 0);
   const pr      = parseFloat(document.getElementById('de-pr').value)      || 0;
   const ship    = parseFloat(document.getElementById('de-shipping').value) || 0;
-  const sysRate = parseFloat(document.getElementById('de-sysfee').value)  || 0;
-  return { rate, fxFee, pr, ship, sysRate };
+  const sysMode = document.getElementById('de-sysmode') ? document.getElementById('de-sysmode').value : (d.sysFeeMode || 'rate');
+  const sysVal  = parseFloat(document.getElementById('de-sysfee').value)  || 0;
+  return { rate, fxFee, pr, ship, sysMode, sysVal };
+}
+
+function switchDealSysMode() {
+  const d = editingDraft;
+  if (!d) return;
+  const mode = document.getElementById('de-sysmode').value;
+  document.getElementById('de-sysfee').value = mode === 'amount' ? (d.sysFeeAmount || 0) : (d.sysFeeRate || 0);
+  refreshDealEdit();
 }
 
 function calcDealRow(r, rate, fxFee, pr) {
-  const costBase   = r.cost * r.qty;
-  const costWithPR = costBase * (1 + pr / 100);
-  const sellJPY    = r.profit < 100 ? costWithPR / (1 - r.profit / 100) : costWithPR;
-  const sellUSD    = rate > 0 ? (sellJPY / rate) * (1 + fxFee / 100) : 0;
-  return { costBase, sellJPY, sellUSD };
+  const L = priceLine(r, rate, fxFee, pr);
+  return { costBase: L.cost, sellJPY: L.totalJPY, sellUSD: L.totalUSDc / 100 };
 }
 
 function refreshDealEdit() {
-  const d = deals.find(d => d.id === editingDealId);
+  const d = editingDraft;
   if (!d) return;
-  const { rate, fxFee, pr, ship, sysRate } = getDealEditData();
-  let tc=0, ts=0;
-  d.rows.forEach(r => { const c=calcDealRow(r,rate,fxFee,pr); tc+=c.costBase; ts+=Math.ceil(c.sellJPY); });
-  let ts_noFee=0;
-  d.rows.forEach(r => { const c=calcDealRow(r,rate,0,pr); ts_noFee+=Math.ceil(c.sellJPY); });
-  const sysFee   = Math.ceil((ts + ship) * sysRate / 100);
-  const grandJPY = ts + ship + sysFee;
-  const grandUSD = (grandJPY / rate) * (1 + fxFee / 100);
-  const profitJPY = ts_noFee - tc;
+  const { rate, fxFee, pr, ship, sysMode, sysVal } = getDealEditData();
+  const P = priceDeal({ rows: d.rows, rate, usdFee: fxFee, pr, shipping: ship, sysMode, sysRate: sysVal, sysAmount: sysVal });
+  const ts = P.subtotalJPY, sysFee = P.sysFee, grandJPY = P.grandJPY, grandUSD = P.grandUSD, profitJPY = P.profitJPY;
   document.getElementById('de-summary').innerHTML =
     `商品小計: <strong>${fmtJPY(ts)}</strong> &nbsp;／&nbsp; 送料: <strong>${fmtJPY(ship)}</strong> &nbsp;／&nbsp; 手数料: <strong>${fmtJPY(sysFee)}</strong><br>
      <span style="color:var(--navy);font-weight:700;">見積総額: ${fmtJPY(grandJPY)} / ${fmtUSD(grandUSD)}</span> &nbsp;&nbsp;
@@ -1730,7 +1890,7 @@ function refreshDealEdit() {
 }
 
 function applyDealDefaultProfit() {
-  const d = deals.find(d => d.id === editingDealId);
+  const d = editingDraft;
   if (!d) return;
   const p = parseFloat(document.getElementById('de-defprofit').value) || 0;
   d.rows.forEach(r => r.profit = p);
@@ -1741,71 +1901,75 @@ function applyDealDefaultProfit() {
 }
 
 function updateDealRow(i, f, v) {
-  const d = deals.find(d => d.id === editingDealId);
+  const d = editingDraft;
   if (!d) return;
   d.rows[i][f] = f === 'name' ? v : (parseFloat(v) || 0);
   refreshDealEdit();
 }
 
 function removeDealRow(i) {
-  const d = deals.find(d => d.id === editingDealId);
+  const d = editingDraft;
   if (!d) return;
   d.rows.splice(i, 1);
-  openDealEdit(editingDealId);
+  document.getElementById('de-rows').innerHTML = dealRowsHtml(d);
+  refreshDealEdit();
 }
 
 function addDealRow() {
-  const d = deals.find(d => d.id === editingDealId);
+  const d = editingDraft;
   if (!d) return;
   d.rows.push({ id: rid++, name: '', cost: 0, profit: 30, qty: 1 });
-  openDealEdit(editingDealId);
+  document.getElementById('de-rows').innerHTML = dealRowsHtml(d);
+  refreshDealEdit();
 }
 
 function saveDealEdit() {
-  const d = deals.find(d => d.id === editingDealId);
+  const d = editingDraft;
   if (!d) return;
-  const { rate, fxFee, pr, ship, sysRate } = getDealEditData();
+  const { rate, fxFee, pr, ship, sysMode, sysVal } = getDealEditData();
   d.clientName = document.getElementById('de-client').value || d.clientName;
-  d.person     = document.getElementById('de-person').value;
   d.memo       = document.getElementById('de-memo').value;
+  d.remarks    = (document.getElementById('de-remarks').value || '').trim();
+  d.carrier    = document.getElementById('de-carrier').value;
+  d.pkgSize    = document.getElementById('de-pkgsize').value;
+  d.sysLabel   = (document.getElementById('de-syslabel').value || '').trim() || d.sysLabel;
+  applyDeFxMeta(d);
   d.fxRate     = rate;
   d.fxFee      = fxFee;
   d.purchaseRate = pr;
   d.shipping   = ship;
-  d.sysFeeRate = sysRate;
+  d.sysFeeMode = sysMode;
+  if (sysMode === 'amount') d.sysFeeAmount = sysVal; else d.sysFeeRate = sysVal;
 
-  let tc=0, ts=0;
-  d.rows.forEach(r => { const c=calcDealRow(r,rate,fxFee,pr); tc+=c.costBase; ts+=Math.ceil(c.sellJPY); });
-  // 利益用の卸売価格はfxFee=0で再計算
-  let ts_noFee=0;
-  d.rows.forEach(r => { const c=calcDealRow(r,rate,0,pr); ts_noFee+=Math.ceil(c.sellJPY); });
-  const sysFee   = Math.ceil((ts + ship) * sysRate / 100);
-  d.grandJPY   = ts + ship + sysFee;
-  d.grandUSD   = (d.grandJPY / rate) * (1 + fxFee / 100);
-  d.profitJPY  = ts_noFee - tc;
-  d.profitUSD  = d.profitJPY / rate;
-  d.totalCost  = tc;
+  computeDealTotals(d);
 
+  const isNew = !deals.some(x => x.id === d.id);
+  upsertRecord('deals', d);
   closeDealModal();
-  renderDeals();
-  renderDealSummary();
+  if (isNew) showToast(`コピーした取引を保存しました（${d.qno}）`);
 }
 
 function previewDealEdit() {
-  const d = deals.find(d => d.id === editingDealId);
+  const d = editingDraft;
   if (!d) return;
 
   // 編集内容を反映（モーダルを閉じずに）
-  const { rate, fxFee, pr, ship, sysRate } = getDealEditData();
+  const { rate, fxFee, pr, ship, sysMode, sysVal } = getDealEditData();
   d.clientName   = document.getElementById('de-client').value || d.clientName;
-  d.person       = document.getElementById('de-person').value;
   d.memo         = document.getElementById('de-memo').value;
+  d.remarks      = (document.getElementById('de-remarks').value || '').trim();
+  d.carrier      = document.getElementById('de-carrier').value;
+  d.pkgSize      = document.getElementById('de-pkgsize').value;
+  d.sysLabel     = (document.getElementById('de-syslabel').value || '').trim() || d.sysLabel;
+  applyDeFxMeta(d);
   d.fxRate       = rate;
   d.fxFee        = fxFee;
   d.purchaseRate = pr;
   d.shipping     = ship;
-  d.sysFeeRate   = sysRate;
-  saveToStorage();
+  d.sysFeeMode   = sysMode;
+  if (sysMode === 'amount') d.sysFeeAmount = sysVal; else d.sysFeeRate = sysVal;
+  computeDealTotals(d);
+  upsertRecord('deals', d);
   const usdFee   = fxFee;
   const toUSD    = (jpy) => (jpy / rate) * (1 + usdFee / 100);
   const sysLabel = d.sysLabel || 'Service Fee';
@@ -1819,46 +1983,9 @@ function previewDealEdit() {
   const td = (txt, right=false, bold=false) =>
     `<td style="padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;${right?'text-align:right;font-family:\'DM Mono\',monospace;':''}${bold?'font-weight:600;':''}">${txt}</td>`;
 
-  let subtotalJPY = 0;
-  const productRows = d.rows.map((r, i) => {
-    const costBase   = r.cost * r.qty;
-    const costWithPR = costBase * (1 + pr / 100);
-    const sellJPYRaw = r.profit < 100 ? costWithPR / (1 - r.profit / 100) : costWithPR;
-    const sellJPY    = Math.ceil(sellJPYRaw);
-    subtotalJPY += sellJPY;
-    const unitJPY = sellJPY / r.qty;
-    const unitUSD = toUSD(unitJPY);
-    const bg0 = i%2===0?'#fff':'#F8F9FC';
-    return `<tr style="background:${bg0}">
-          <td style="padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;">${r.name||'—'}</td>
-          <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(unitJPY)}</td>
-          <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(unitUSD)}</td>
-          <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${r.qty}</td>
-          <td style="padding:10px 14px;text-align:right;font-size:13px;font-weight:600;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(sellJPY)}</td>
-          <td style="padding:10px 14px;text-align:right;font-size:13px;font-weight:600;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(sellJPY))}</td>
-        </tr>`;
-  }).join('');
-
-  const shipping  = d.shipping || 0;
-  const sysFee    = Math.ceil((subtotalJPY + shipping) * sysRate / 100);
-  const grandJPY  = subtotalJPY + shipping + sysFee;
-  const grandUSD  = toUSD(grandJPY);
-  const subtotalUSD = toUSD(subtotalJPY);
-
-  const extraRows = [
-    shipping > 0 ? `<tr style="background:#F8F9FC">
-      <td style="padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;">Shipping</td>
-      <td colspan="3" style="border-bottom:1px solid #e5e7eb;"></td>
-      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(shipping)}</td>
-      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(shipping))}</td>
-    </tr>` : '',
-    sysFee > 0 ? `<tr style="background:#F8F9FC">
-      <td style="padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;">${sysLabel}</td>
-      <td colspan="3" style="border-bottom:1px solid #e5e7eb;"></td>
-      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtJPY(sysFee)}</td>
-      <td style="padding:10px 14px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;font-family:'DM Mono',monospace;">${fmtUSD(toUSD(sysFee))}</td>
-    </tr>` : '',
-  ].filter(Boolean).join('');
+  const P = priceDeal(dealPriceParams(d));
+  const { productRows, extraRows } = quoteRowsHtml(P, d.rows.map(r => r.name), sysLabel, false);
+  const subtotalJPY = P.subtotalJPY, subtotalUSD = P.subtotalUSD, grandJPY = P.grandJPY, grandUSD = P.grandUSD;
 
   document.getElementById('quote-preview').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px;">
@@ -1877,11 +2004,10 @@ function previewDealEdit() {
       <div style="border-left:3px solid #1F3864;padding-left:14px;">
         <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Bill To</div>
         <div style="font-size:15px;font-weight:700;color:#111827;">${d.clientName}</div>
-        ${d.person ? `<div style="font-size:13px;color:#4B5563;margin-top:3px;">Attn: ${d.person}</div>` : ''}
       </div>
       <div style="border-left:3px solid #E5E7EB;padding-left:14px;">
         <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Items</div>
-        <div style="font-size:14px;font-weight:600;color:#111827;">${d.rows.length} item${d.rows.length!==1?'s':''}</div>
+        <div style="font-size:14px;font-weight:600;color:#111827;">${d.rows.length} item${d.rows.length!==1?'s':''} ／ QTY ${d.rows.reduce((s2,r)=>s2+(r.qty||0),0)}</div>
         <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">Valid until: ${expiryFmt}</div>
       </div>
     </div>
@@ -1910,23 +2036,18 @@ function previewDealEdit() {
         <tr style="background:#1F3864;">
           <td colspan="4" style="padding:13px 14px;color:#fff;font-weight:700;font-size:13px;letter-spacing:0.04em;">TOTAL</td>
           <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtJPY(grandJPY)}</td>
-          <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtUSDCeil(grandUSD)}</td>
+          <td style="padding:13px 14px;text-align:right;color:#fff;font-weight:700;font-size:15px;font-family:'DM Mono',monospace;">${fmtUSD(grandUSD)}</td>
         </tr>
       </tfoot>
     </table>
 
+    ${remarksHtml(d.remarks)}
     <div style="margin-top:20px;font-size:11px;color:#9CA3AF;border-top:1px solid #E5E7EB;padding-top:14px;line-height:1.9;">
       * All prices are quoted in Japanese Yen (JPY) and US Dollar (USD).<br>
       * This quotation is valid until ${expiryFmt}.<br>
       * <strong style="color:#374151;">Any customs duties, taxes, or import fees that may arise are the sole responsibility of the buyer.</strong>
     </div>
 
-    <div style="display:flex;justify-content:flex-end;margin-top:32px;">
-      <div style="text-align:center;border:1.5px solid #1F3864;border-radius:4px;padding:12px 32px;min-width:130px;">
-        <div style="font-size:9px;font-weight:700;color:#1F3864;letter-spacing:0.1em;margin-bottom:2px;">AUTHORIZED</div>
-        <div style="height:44px;"></div>
-      </div>
-    </div>
   `;
   closeDealModal();
   showPage('quote');
@@ -1935,11 +2056,496 @@ function previewDealEdit() {
 function closeDealModal() {
   document.getElementById('deal-modal-overlay').style.display = 'none';
   editingDealId = null;
+  editingDraft  = null;
+}
+
+// ── 取引：確定・ピン留め・コピー・並べ替え ──
+function toggleDealFlag(id, f) {
+  const d = deals.find(x => x.id === id);
+  if (!d) return;
+  d[f] = !d[f];
+  if (f === 'confirmed') d.confirmedAt = d.confirmed ? new Date().toISOString() : null;
+  upsertRecord('deals', d);
+  renderDeals();
+}
+
+// 合計値を取引の保存値から再計算
+function computeDealTotals(d) {
+  d.calcVer = 2;   // 新しい計算方式で計算済み
+  const P = priceDeal(dealPriceParams(d));
+  d.grandJPY  = P.grandJPY;
+  d.grandUSD  = P.grandUSD;
+  d.profitJPY = P.profitJPY;
+  d.profitUSD = P.profitUSD;
+  d.totalCost = P.cost;
+}
+
+async function copyDeal(id) {
+  const src = deals.find(d => d.id === id);
+  if (!src) return;
+  const c = JSON.parse(JSON.stringify(src));
+  c.id          = genId();
+  c.savedAt     = new Date().toISOString();
+  c.qno         = nextQno() + 'C';   // コピーは枝番の後ろに C
+  c.status      = 'none';
+  c.confirmed   = false;
+  c.confirmedAt = null;
+  c.pinned      = false;
+  delete c.order;
+  delete c.orderNo;
+  delete c.orderIssuedAt;
+  c.copiedFrom  = src.qno || '';
+  c.rows        = (c.rows || []).map(r => ({ ...r, id: rid++ }));
+  // レートはコピー元のまま（日付もコピー元のものを引き継ぐ）
+  if (!c.fxFetchedAt) { c.fxFetchedAt = src.savedAt; c.fxSource = src.fxSource || null; }
+  computeDealTotals(c);
+  openDealEdit(c.id, c);
+}
+
+let _dragDealId = null;
+function dealDragStart(e, id) {
+  _dragDealId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', id); } catch (_) {}
+  e.currentTarget.classList.add('dragging');
+}
+function dealDragOver(e, id) {
+  if (!_dragDealId || id === _dragDealId) return;
+  e.preventDefault();
+  const el = e.currentTarget, r = el.getBoundingClientRect();
+  const after = (e.clientY - r.top) > r.height / 2;
+  el.classList.toggle('drop-after', after);
+  el.classList.toggle('drop-before', !after);
+}
+function dealDragLeave(e) {
+  if (e.currentTarget.contains(e.relatedTarget)) return;
+  e.currentTarget.classList.remove('drop-before', 'drop-after');
+}
+function dealDragEnd() {
+  _dragDealId = null;
+  document.querySelectorAll('.deal-card').forEach(c => c.classList.remove('dragging', 'drop-before', 'drop-after'));
+}
+function dealDrop(e, targetId) {
+  e.preventDefault();
+  const after = e.currentTarget.classList.contains('drop-after');
+  const id = _dragDealId;
+  dealDragEnd();
+  if (!id || id === targetId) return;
+  moveDealTo(id, targetId, after);
+}
+function dealSection(id) {
+  if (_dealVisible.pinned.includes(id)) return _dealVisible.pinned;
+  if (_dealVisible.rest.includes(id))   return _dealVisible.rest;
+  return null;
+}
+function moveDealTo(id, targetId, after) {
+  const sec = dealSection(targetId);
+  if (!sec || dealSection(id) !== sec) { showToast('ピン留めの取引とそれ以外の取引の間では移動できません'); return; }
+  const list = sec.filter(x => x !== id);
+  list.splice(list.indexOf(targetId) + (after ? 1 : 0), 0, id);
+  applyManualOrder(list, id);
+}
+function moveDealStep(id, dir) {
+  const sec = dealSection(id);
+  if (!sec) return;
+  const i = sec.indexOf(id), j = i + dir;
+  if (j < 0 || j >= sec.length) return;
+  const list = sec.slice();
+  list.splice(i, 1);
+  list.splice(j, 0, id);
+  applyManualOrder(list, id);
+}
+// 動かした取引だけに、前後の取引の間の値を付けて保存（書き込みは原則1件）
+function applyManualOrder(list, movedId) {
+  const get = x => deals.find(d => d.id === x);
+  const i = list.indexOf(movedId);
+  const prev = i > 0 ? dealSortKey(get(list[i - 1])) : null;
+  const next = i < list.length - 1 ? dealSortKey(get(list[i + 1])) : null;
+  let k;
+  if (prev === null && next === null) return;
+  if (prev === null) k = next - 1000;
+  else if (next === null) k = prev + 1000;
+  else k = (prev + next) / 2;
+  if ((prev !== null && !(k > prev)) || (next !== null && !(k < next))) {
+    // 間に入れる余地がない場合は、表示中の取引の順番を振り直す
+    const base = Math.min(...list.map(x => dealSortKey(get(x))));
+    list.forEach((x, n) => { const d = get(x); if (d) { d.order = base + n * 1000; upsertRecord('deals', d); } });
+    renderDeals();
+    return;
+  }
+  const d = get(movedId);
+  if (!d) return;
+  d.order = k;
+  upsertRecord('deals', d);
+  renderDeals();
+}
+function onDealSortChange() {
+  try { localStorage.setItem('bizapp_deal_sort', document.getElementById('dealSort').value); } catch (_) {}
+  renderDeals();
+}
+
+// ── 為替レートの自動取得（無料API・APIキー不要） ──
+const FX_SOURCES = [
+  { name: 'open.er-api.com', url: 'https://open.er-api.com/v6/latest/USD',
+    parse: j => ({ rate: j && j.rates && j.rates.JPY, date: j && j.time_last_update_unix ? new Date(j.time_last_update_unix * 1000).toISOString().slice(0, 10) : null }) },
+  { name: 'frankfurter', url: 'https://api.frankfurter.dev/v1/latest?base=USD&symbols=JPY',
+    parse: j => ({ rate: j && j.rates && j.rates.JPY, date: j && j.date }) },
+  { name: 'currency-api', url: 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.min.json',
+    parse: j => ({ rate: j && j.usd && j.usd.jpy, date: j && j.date }) },
+];
+let fxMeta   = { source: null, fetchedAt: null, rateDate: null };  // 計算ツールのレート情報
+let deFxMeta = null;                                               // 取引編集中のレート情報
+
+async function getLatestRate() {
+  for (const s of FX_SOURCES) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(s.url, { cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(t);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const p = s.parse(await res.json());
+      if (!(p.rate > 0)) throw new Error('rate missing');
+      return { rate: Math.floor(p.rate), date: p.date || null, source: s.name };
+    } catch (e) { console.warn('[為替] 取得失敗:', s.name, e); }
+  }
+  return null;
+}
+
+function fmtDateJP(iso) {
+  const t = new Date(iso);
+  return isNaN(t) ? '' : t.toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+function fmtDateTimeJP(iso) {
+  const t = new Date(iso);
+  return isNaN(t) ? '' : fmtDateJP(iso) + ' ' + t.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+}
+function fxMetaText(m, fallbackIso) {
+  if (m && m.fetchedAt && !m.source) return `保存時のレート（${fmtDateJP(m.fetchedAt)}）`;
+  if (m && m.fetchedAt) return `${m.source === 'manual' ? '手入力' : '自動取得'}：${fmtDateTimeJP(m.fetchedAt)}${m.rateDate && m.source !== 'manual' ? `（基準日 ${m.rateDate}）` : ''}`;
+  return fallbackIso ? `保存時のレート（${fmtDateJP(fallbackIso)}）` : '未取得';
+}
+
+function updateFxInfo() {
+  const info = document.getElementById('fxRateInfo');
+  if (!info) return;
+  info.style.color = '';
+  info.textContent = fxMeta.fetchedAt ? fxMetaText(fxMeta) : '未取得（初期値）';
+}
+
+async function fetchFxRate(manual) {
+  const info = document.getElementById('fxRateInfo');
+  const btn  = document.getElementById('fx-fetch-btn');
+  if (info) { info.textContent = 'レート取得中…'; info.style.color = ''; }
+  if (btn) btn.disabled = true;
+  const fx = await getLatestRate();
+  if (btn) btn.disabled = false;
+  if (!fx) {
+    if (info) {
+      info.textContent = fxMeta.fetchedAt ? `最新レートを取得できませんでした（${fxMetaText(fxMeta)} の値を使用中）` : '自動取得できませんでした。手入力してください';
+      info.style.color = 'var(--danger)';
+    }
+    if (manual) showToast('レートを取得できませんでした。通信環境を確認してください');
+    return null;
+  }
+  document.getElementById('fxRate').value = fx.rate;
+  fxMeta = { source: fx.source, fetchedAt: new Date().toISOString(), rateDate: fx.date };
+  updateFxInfo();
+  recalc();
+  if (manual) showToast(`最新レートを取得しました：1 USD = ¥${fx.rate}`);
+  return fx;
+}
+
+function onFxManual() {
+  fxMeta = { source: 'manual', fetchedAt: new Date().toISOString(), rateDate: null };
+  updateFxInfo();
+  recalc();
+}
+
+// 自動取得したレートが今日のものでなければ取り直す（手入力の場合はそのまま）
+async function ensureFxToday() {
+  if (fxMeta.source === 'manual' || !fxMeta.fetchedAt) return;
+  if (fxMeta.fetchedAt && new Date(fxMeta.fetchedAt).toDateString() === new Date().toDateString()) return;
+  const before = gv('fxRate');
+  const fx = await fetchFxRate(false);
+  if (fx && fx.rate !== before && fxMeta.fetchedAt) showToast(`レートを本日の値に更新しました：1 USD = ¥${fx.rate}`);
+}
+
+function onDealRateManual() {
+  deFxMeta = { source: 'manual', fetchedAt: new Date().toISOString(), rateDate: null };
+  const i = document.getElementById('de-rate-info');
+  if (i) i.textContent = fxMetaText(deFxMeta);
+  refreshDealEdit();
+}
+async function refreshDealRate() {
+  const btn = document.getElementById('de-rate-btn');
+  if (btn) btn.disabled = true;
+  const fx = await getLatestRate();
+  if (btn) btn.disabled = false;
+  if (!fx) { showToast('レートを取得できませんでした。通信環境を確認してください'); return; }
+  if (!editingDraft) return;
+  document.getElementById('de-rate').value = fx.rate;
+  deFxMeta = { source: fx.source, fetchedAt: new Date().toISOString(), rateDate: fx.date };
+  const i = document.getElementById('de-rate-info');
+  if (i) i.textContent = fxMetaText(deFxMeta);
+  const cn = document.getElementById('de-copy-rate');
+  if (cn) cn.innerHTML = `為替レートを本日のレート <strong>1 USD = ¥${fx.rate}</strong>（${fmtDateJP(deFxMeta.fetchedAt)}）に更新しました。`;
+  refreshDealEdit();
+  showToast(`本日のレートを反映しました：1 USD = ¥${fx.rate}`);
+}
+function applyDeFxMeta(d) {
+  if (deFxMeta && deFxMeta.fetchedAt) {
+    d.fxSource = deFxMeta.source; d.fxFetchedAt = deFxMeta.fetchedAt; d.fxRateDate = deFxMeta.rateDate || null;
+  }
+}
+
+// ── 共有設定（手数料の名称など。クラウドに保存され全員に反映） ──
+let appSettings = { feeLabel: 'PayPal fee' };
+function applyAppSettings(s) {
+  appSettings = { ...appSettings, ...s };
+  const el = document.getElementById('sysFeeLabel');
+  if (el && document.activeElement !== el && appSettings.feeLabel) { el.value = appSettings.feeLabel; updateSummary(); }
+}
+function saveFeeLabelSetting() {
+  const el = document.getElementById('sysFeeLabel');
+  const v = (el.value || '').trim();
+  if (!v) { el.value = appSettings.feeLabel; updateSummary(); return; }
+  if (v === appSettings.feeLabel) return;
+  appSettings.feeLabel = v;
+  upsertRecord('settings', { ...appSettings, id: 'app' });
+  showToast(`手数料の名称を「${v}」にしました（全員の既定に反映）`);
+}
+
+// ── 見積もり依頼シートからの引用 ──
+// 対象：各メーカーのタブで L列「直接取引」にチェックが入っている行
+// 引用：品番（C列「品番変更」に新しい品番があればそちら）→ 商品名、E列「卸値（税込）」→ 仕入原価
+// 選択可：F列「在庫状況」が 在庫あり／欠品 で、卸値が入っているもの（それ以外はグレーアウト）
+const QUOTE_SHEET_ID   = '1AGxZVaNadx2O2FopSN9XevOgIyvpDwDqrC1-g9ptJgQ';
+const QUOTE_SHEET_URL  = `https://docs.google.com/spreadsheets/d/${QUOTE_SHEET_ID}/edit`;
+const QUOTE_SHEET_TABS = ['トヨタ', 'ホンダ', '三菱', '日産', 'スバル', 'マツダ', 'スズキ', 'ヤマハ', '川崎'];
+let sheetItems = [];
+let sheetLoading = false;
+
+function escHtml(t) { return String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function remarksHtml(text) {
+  const t = (text || '').trim();
+  if (!t) return '';
+  return `<div style="margin-top:20px;border:1px solid #E5E7EB;border-radius:6px;padding:12px 16px;">
+      <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Remarks</div>
+      <div style="font-size:12px;color:#374151;line-height:1.8;">${escHtml(t).replace(/\n/g, '<br>')}</div>
+    </div>`;
+}
+
+// CSV（セル内の改行・カンマ・"" に対応）
+function parseCSV(text) {
+  const out = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+      else cell += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); out.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell !== '' || row.length) { row.push(cell); out.push(row); }
+  return out;
+}
+const isPartNo = t => /^[A-Za-z0-9][A-Za-z0-9-]{3,}$/.test((t || '').trim());
+const isChecked = v => /^(true|1|✓|☑|✔|o|○)$/i.test((v || '').trim());
+function parsePrice(v) { const n = parseInt(String(v || '').replace(/[^\d]/g, ''), 10); return isNaN(n) ? 0 : n; }
+
+async function fetchSheetTab(tab) {
+  const url = `https://docs.google.com/spreadsheets/d/${QUOTE_SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(tab)}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = parseCSV(await res.text());
+  if (!data.length) return [];
+  const head = data[0].map(h => (h || '').replace(/[\u0000-\u001f\s]/g, ''));
+  if (!head.includes('直接取引')) return [];          // 例示タブなど、列構成が違うものは対象外
+  const col = (test, fb) => { const i = head.findIndex(test); return i >= 0 ? i : fb; };
+  const cA = col(h => h.startsWith('依頼日'), 0), cB = col(h => h === '品番', 1), cC = col(h => h.startsWith('品番変更'), 2);
+  const cE = col(h => h.startsWith('卸値'), 4), cF = col(h => h.startsWith('在庫状況'), 5), cG = col(h => h === '納期', 6);
+  const cH = col(h => h.startsWith('納期未定'), 7), cI = col(h => h.startsWith('在庫数'), 8), cL = col(h => h === '直接取引', 11);
+  return data.slice(1).map((r, i) => {
+    const part = (r[cB] || '').trim(), change = (r[cC] || '').trim();
+    const status = (r[cF] || '').trim(), price = parsePrice(r[cE]);
+    const newPart = (isPartNo(change) && change !== part) ? change : '';
+    const it = { tab, row: i + 2, date: (r[cA] || '').trim(), part, newPart, changeNote: newPart ? '' : change, price, status,
+                 due: (r[cG] || '').trim(), dueUndecided: isChecked(r[cH]), stock: (r[cI] || '').replace(/\s+/g, ' ').trim(), direct: isChecked(r[cL]) };
+    const okStatus = status.startsWith('在庫あり') || status.startsWith('欠品');
+    it.selectable = okStatus && price > 0;
+    it.reason = !price ? (status ? `${status}・卸値未記入` : '卸値未記入') : (status || '在庫状況未記入');
+    return it;
+  }).filter(it => it.direct && it.part);
+}
+
+function sheetItemLabel(it) {
+  const name = it.newPart ? `${it.newPart}（旧 ${it.part}）` : it.part;
+  const price = it.price ? fmtJPY(it.price) : '—';
+  let st;
+  if (!it.selectable) st = `【${it.reason}】選択不可`;
+  else if (it.status.startsWith('欠品')) st = `【欠品・納期${it.dueUndecided || !it.due ? '未定' : ' ' + it.due}】`;
+  else st = `【在庫あり${it.stock ? '・' + it.stock.slice(0, 16) : ''}】`;
+  const date = it.date ? `　${it.date.slice(5)}依頼` : '';
+  return `${name}　${price}　${st}${date}`;
+}
+
+async function loadSheetItems(force) {
+  if (sheetLoading) return;
+  if (sheetItems.length && !force) { renderSheetSelect(); return; }
+  sheetLoading = true;
+  const sel = document.getElementById('sheet-select'), st = document.getElementById('sheet-status');
+  sel.innerHTML = '<option value="">読み込み中…</option>'; sel.disabled = true;
+  st.style.color = ''; st.textContent = '見積もり依頼シートを読み込んでいます…';
+  const results = await Promise.allSettled(QUOTE_SHEET_TABS.map(fetchSheetTab));
+  sheetLoading = false; sel.disabled = false;
+  const failed = QUOTE_SHEET_TABS.filter((t, i) => results[i].status === 'rejected');
+  if (failed.length === QUOTE_SHEET_TABS.length) {
+    sel.innerHTML = '<option value="">読み込めませんでした</option>';
+    st.style.color = 'var(--danger)';
+    st.textContent = 'シートを読み込めませんでした。通信環境と、シートの共有設定（リンクを知っている全員が閲覧可）を確認してください。';
+    return;
+  }
+  sheetItems = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+  renderSheetSelect(failed);
+}
+
+function renderSheetSelect(failed) {
+  const sel = document.getElementById('sheet-select'), st = document.getElementById('sheet-status');
+  if (!sheetItems.length) {
+    sel.innerHTML = '<option value="">「直接取引」にチェックの入ったパーツがありません</option>';
+  } else {
+    sel.innerHTML = '<option value="">— 引用するパーツを選択 —</option>' + QUOTE_SHEET_TABS.map(tab => {
+      const list = sheetItems.map((it, i) => ({ it, i })).filter(x => x.it.tab === tab);
+      if (!list.length) return '';
+      return `<optgroup label="${escHtml(tab)}">${list.map(({ it, i }) =>
+        `<option value="${i}" ${it.selectable ? '' : 'disabled'}>${escHtml(sheetItemLabel(it))}</option>`).join('')}</optgroup>`;
+    }).join('');
+  }
+  const ok = sheetItems.filter(it => it.selectable).length;
+  const t = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  st.style.color = '';
+  st.innerHTML = `直接取引 ${sheetItems.length}件（選択できるもの ${ok}件）・${t} 時点` +
+    ((failed && failed.length) ? `<br><span style="color:var(--danger);">読み込めなかったタブ：${escHtml(failed.join('、'))}</span>` : '');
+}
+
+function toggleSheetPanel() {
+  const p = document.getElementById('sheet-panel');
+  const open = p.style.display === 'none';
+  p.style.display = open ? 'block' : 'none';
+  document.getElementById('sheet-open-link').href = QUOTE_SHEET_URL;
+  if (open) loadSheetItems(false);
+}
+
+function pickSheetItem(v) {
+  const sel = document.getElementById('sheet-select');
+  const it = sheetItems[parseInt(v, 10)];
+  sel.value = '';
+  if (!it || !it.selectable) return;
+  const part = it.newPart || it.part;   // 発注は変更後の品番で行うため、見積書には変更後の品番を載せる
+  // お客様向けの備考（品番変更・欠品で入荷日が決まっているもの）
+  const notes = [];
+  if (it.newPart) notes.push(`* Part number change: ${it.part} has been updated to ${it.newPart}. The contents are unchanged.`);
+  const arrival = it.status.startsWith('欠品') && !it.dueUndecided ? fmtArrivalDate(it.due) : '';
+  if (arrival) notes.push(`* Part ${part} is currently out of stock and is expected to arrive on ${arrival}.`);
+  // 備考があるパーツは見積書の品番に * を付けて、Remarks に気づきやすくする
+  const name = notes.length ? `${part} *` : part;
+  const empty = rows.find(r => !String(r.name || '').trim() && !(parseFloat(r.cost) > 0));
+  if (empty) { empty.name = name; empty.cost = it.price; empty.qty = empty.qty || 1; renderTable(); }
+  else addRow(name, it.price);
+  if (notes.length) {
+    const ta = document.getElementById('q-remarks');
+    notes.forEach(note => { if (!ta.value.includes(note)) ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + note; });
+    showToast(`${part} を追加しました（見積書の備考に追記しました）`);
+  } else {
+    showToast(`${part} を追加しました`);
+  }
+}
+
+// 入荷予定日を英語表記に（例：2026/10/24 → October 24, 2026）。日付でなければ空
+function fmtArrivalDate(v) {
+  const m = /^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/.exec((v || '').trim());
+  if (!m) return '';
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return isNaN(d) ? '' : d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+// ── オーダー番号（発送用） ──
+// 形式：DIRECT + 発行日（日本時間）。同じ日の2件目以降は -2, -3 … の枝番
+function localYMD(sep) {
+  const t = new Date();
+  return [t.getFullYear(), String(t.getMonth() + 1).padStart(2, '0'), String(t.getDate()).padStart(2, '0')].join(sep);
+}
+function nextOrderNo() {
+  const base = 'DIRECT' + localYMD('');
+  const used = new Set(deals.map(x => x.orderNo).filter(Boolean));
+  if (!used.has(base)) return base;
+  let n = 2;
+  while (used.has(`${base}-${n}`)) n++;
+  return `${base}-${n}`;
+}
+let _orderDealId = null;
+function openOrderModal(id) {
+  const d = deals.find(x => x.id === id);
+  if (!d) return;
+  _orderDealId = id;
+  let ov = document.getElementById('order-modal');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'order-modal';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1100;display:none;align-items:center;justify-content:center;';
+    ov.addEventListener('click', e => { if (e.target === ov) closeOrderModal(); });
+    document.body.appendChild(ov);
+  }
+  const btn = 'flex:1;padding:10px;border-radius:var(--radius-sm);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;';
+  ov.innerHTML = `<div role="dialog" aria-modal="true" style="background:#fff;border-radius:12px;padding:26px 30px;width:440px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+      <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:8px;">オーダー番号を発行します</div>
+      <div style="font-size:12px;color:var(--text-2);line-height:1.8;margin-bottom:14px;">
+        「${escHtml(d.clientName)}」の取引（${escHtml(d.qno || '')}・${fmtJPY(d.grandJPY || 0)}）${d.status === 'paid' ? '' : 'を支払い済みにして'}、発送用のオーダー番号を発行します。
+      </div>
+      <div style="background:var(--accent-light);border-radius:8px;padding:14px;text-align:center;font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--navy);letter-spacing:.04em;">${nextOrderNo()}</div>
+      <div style="display:flex;gap:10px;margin-top:18px;">
+        <button onclick="closeOrderModal()" style="${btn}border:1px solid var(--border-strong);background:var(--bg);color:var(--text);font-weight:500;">キャンセル</button>
+        <button id="order-confirm-btn" onclick="confirmOrderNo()" style="${btn}flex:2;border:none;background:var(--navy);color:#fff;">確定</button>
+      </div>
+    </div>`;
+  ov.style.display = 'flex';
+  document.getElementById('order-confirm-btn').focus();
+}
+function closeOrderModal() {
+  const ov = document.getElementById('order-modal');
+  if (ov) ov.style.display = 'none';
+  _orderDealId = null;
+}
+function confirmOrderNo() {
+  const d = deals.find(x => x.id === _orderDealId);
+  closeOrderModal();
+  if (!d || d.orderNo) return;
+  d.orderNo = nextOrderNo();               // 確定した時点の最新データで採番
+  d.orderIssuedAt = new Date().toISOString();
+  if (d.status === 'paid') {               // すでに支払い済み（改修前の取引）の場合は番号だけ付ける
+    upsertRecord('deals', d);
+    renderDeals();
+  } else {
+    applyDealStatus(d, 'paid');
+  }
+  const sh = shippings.find(x => x.dealId === d.id);
+  if (sh && !sh.orderNo) { sh.orderNo = d.orderNo; upsertRecord('shippings', sh); }
+  showToast(`オーダー番号 ${d.orderNo} を発行しました`);
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); showToast(`${t} をコピーしました`); }
+  catch (_) {
+    const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); showToast(`${t} をコピーしました`); } catch (__) { showToast('コピーできませんでした'); }
+    ta.remove();
+  }
 }
 
 // ── SHIPPING ──
 let shippings = [];
-let shippingId = 1;
 let editingShippingId = null;
 
 const SH_STATUS_STYLES = {
@@ -1955,7 +2561,7 @@ function renderShipping() {
   if (!list) return;
 
   let items = shippings.filter(s => {
-    const matchQ  = !q || s.customer.toLowerCase().includes(q) || s.item.toLowerCase().includes(q) || (s.tracking||'').toLowerCase().includes(q);
+    const matchQ  = !q || s.customer.toLowerCase().includes(q) || s.item.toLowerCase().includes(q) || (s.tracking||'').toLowerCase().includes(q) || (s.orderNo||'').toLowerCase().includes(q);
     const matchSt = !sf || s.status === sf;
     return matchQ && matchSt;
   });
@@ -1964,7 +2570,7 @@ function renderShipping() {
   document.getElementById('sh-preparing').textContent = shippings.filter(s=>s.status==='準備中').length;
   document.getElementById('sh-shipped').textContent   = shippings.filter(s=>s.status==='発送済').length;
 
-  if (!items.length) { list.innerHTML = '<div class="no-results">📦 発送データがありません</div>'; return; }
+  if (!items.length) { list.innerHTML = '<div class="no-results">' + ic('package') + ' 発送データがありません</div>'; return; }
 
   items = items.slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
 
@@ -1976,24 +2582,26 @@ function renderShipping() {
     return `
     <div style="background:var(--surface);border:1px solid ${dimmed?'#E5E7EB':'var(--border)'};border-radius:var(--radius);padding:16px 20px;margin-bottom:10px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;box-shadow:var(--shadow);opacity:${dimmed?'0.55':'1'};transition:opacity 0.2s;">
       <div>
-        <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;">👤 ${s.customer}${flag}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;">${ic('user')} ${s.customer}${flag}</div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
-          <span style="font-size:14px;font-weight:700;color:${dimmed?'var(--text-3)':'var(--text)'};">📦 ${s.item}</span>
+          <span style="font-size:14px;font-weight:700;color:${dimmed?'var(--text-3)':'var(--text)'};">${ic('package')} ${s.item}</span>
           <span style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${st.bg};color:${st.color};border:1px solid ${st.border};">${s.status}</span>
         </div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text-2);line-height:1.8;">
-          ${s.date ? `<span>📅 ${s.date}</span>` : ''}
-          ${s.carrier ? `<span>🚚 ${s.carrier}</span>` : ''}
-          ${s.tracking ? `<span style="font-family:'DM Mono',monospace;">🔢 ${s.tracking}</span>` : ''}
+          ${s.date ? `<span>${ic('calendar')} ${s.date}</span>` : ''}
+          ${s.size ? `<span>${ic('ruler')} ${s.size}</span>` : ''}
+          ${s.carrier ? `<span>${ic('truck')} ${s.carrier}</span>` : ''}
+          ${s.orderNo ? `<span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--navy);">${s.orderNo}</span>` : ''}
+          ${s.tracking ? `<span style="font-family:'DM Mono',monospace;">${ic('hash')} ${s.tracking}</span>` : ''}
         </div>
-        ${s.note ? `<div style="margin-top:6px;font-size:12px;color:var(--text-3);">📝 ${s.note}</div>` : ''}
+        ${s.note ? `<div style="margin-top:6px;font-size:12px;color:var(--text-3);">${ic('pencil')} ${s.note}</div>` : ''}
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
-        <select onchange="quickUpdateShStatus(${s.id}, this.value)" style="padding:5px 8px;border:1px solid ${st.border};border-radius:20px;font-size:11px;font-weight:700;background:${st.bg};color:${st.color};cursor:pointer;font-family:inherit;">
+        <select onchange="quickUpdateShStatus('${s.id}', this.value)" style="padding:5px 8px;border:1px solid ${st.border};border-radius:20px;font-size:11px;font-weight:700;background:${st.bg};color:${st.color};cursor:pointer;font-family:inherit;">
           ${['準備中','発送済','キャンセル'].map(opt=>`<option value="${opt}"${opt===s.status?' selected':''}>${opt}</option>`).join('')}
         </select>
-        <button onclick="openShippingModal(${s.id})" style="padding:5px 12px;font-size:11px;font-weight:700;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--bg);color:var(--text-2);cursor:pointer;font-family:inherit;">編集</button>
-        <button onclick="deleteShipping(${s.id})" style="padding:5px 10px;font-size:11px;border:1px solid var(--danger);border-radius:var(--radius-sm);background:var(--danger-light);color:var(--danger);cursor:pointer;font-family:inherit;">削除</button>
+        <button onclick="openShippingModal('${s.id}')" style="padding:5px 12px;font-size:11px;font-weight:700;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--bg);color:var(--text-2);cursor:pointer;font-family:inherit;">編集</button>
+        <button onclick="deleteShipping('${s.id}')" style="padding:5px 10px;font-size:11px;border:1px solid var(--danger);border-radius:var(--radius-sm);background:var(--danger-light);color:var(--danger);cursor:pointer;font-family:inherit;">削除</button>
       </div>
     </div>`;
   }).join('');
@@ -2001,7 +2609,7 @@ function renderShipping() {
 
 function quickUpdateShStatus(id, newStatus) {
   const s = shippings.find(s => s.id === id);
-  if (s) { s.status = newStatus; saveToStorage(); renderShipping(); }
+  if (s) { s.status = newStatus; upsertRecord('shippings', s); renderShipping(); }
 }
 
 function openShippingModal(id = null) {
@@ -2014,6 +2622,7 @@ function openShippingModal(id = null) {
     document.getElementById('sh-modal-title').textContent = '発送を編集';
     sel.value = s.customer;
     document.getElementById('sh-m-item').value     = s.item;
+    document.getElementById('sh-m-size').value     = s.size || '';
     document.getElementById('sh-m-date').value     = s.date || today;
     document.getElementById('sh-m-status').value   = s.status;
     document.getElementById('sh-m-carrier').value  = ['DHL','EMS','FedEx','その他'].includes(s.carrier) ? s.carrier : (s.carrier ? 'その他' : '');
@@ -2022,6 +2631,7 @@ function openShippingModal(id = null) {
   } else {
     document.getElementById('sh-modal-title').textContent = '発送を追加';
     document.getElementById('sh-m-item').value     = '';
+    document.getElementById('sh-m-size').value     = '';
     document.getElementById('sh-m-date').value     = today;
     document.getElementById('sh-m-status').value   = '準備中';
     document.getElementById('sh-m-carrier').value  = '';
@@ -2043,6 +2653,7 @@ function saveShipping() {
   const data = {
     customer,
     item,
+    size:     document.getElementById('sh-m-size').value.trim(),
     date:     document.getElementById('sh-m-date').value,
     status:   document.getElementById('sh-m-status').value,
     carrier:  document.getElementById('sh-m-carrier').value,
@@ -2051,122 +2662,163 @@ function saveShipping() {
   };
   if (editingShippingId) {
     const s = shippings.find(s => s.id === editingShippingId);
-    Object.assign(s, data);
+    upsertRecord('shippings', Object.assign(s, data));
   } else {
-    shippings.push({ id: shippingId++, ...data });
+    upsertRecord('shippings', { id: genId(), ...data });
   }
   closeShippingModal();
-  saveToStorage();
-  renderShipping();
 }
 
 function deleteShipping(id) {
   if (!confirm('この発送データを削除しますか？')) return;
-  shippings = shippings.filter(s => s.id !== id);
-  shippingId = shippings.length ? Math.max(...shippings.map(s=>s.id)) + 1 : 1;
-  saveToStorage();
+  removeRecord('shippings', id);
+}
+
+// ── クラウド保存ヘルパー ──
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function upsertRecord(col, obj) { if (fbApi) fbApi.upsert(col, obj); }
+function removeRecord(col, id)  { if (fbApi) fbApi.remove(col, id); }
+
+// ── クラウド同期（ログイン後にFirebaseモジュールから呼ばれる） ──
+let fbApi = null;
+let syncStarted = false;
+const _ready = { customers: false, deals: false, shippings: false };
+
+function appStart(api, user) {
+  fbApi = api;
+  const ue = document.getElementById('sidebar-user');
+  if (ue) ue.textContent = user.email || '';
+  if (syncStarted) return;
+  syncStarted = true;
+  fbApi.subscribe('customers', list => {
+    customers = list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    _ready.customers = true;
+    rerenderAll();
+    maybeMigrateLocal();
+  });
+  fbApi.subscribe('deals', list => {
+    deals = list.sort((a, b) => (a.savedAt || '').localeCompare(b.savedAt || ''));
+    _ready.deals = true;
+    rerenderAll();
+    maybeMigrateLocal();
+  });
+  fbApi.subscribe('settings', list => {
+    const st = list.find(x => x.id === 'app');
+    if (st) applyAppSettings(st);
+  });
+  fbApi.subscribe('shippings', list => {
+    shippings = list;
+    _ready.shippings = true;
+    rerenderAll();
+    maybeMigrateLocal();
+  });
+}
+
+function rerenderAll() {
+  filterCustomers();
+  renderDeals();
+  renderDealSummary();
+  renderSales();
   renderShipping();
+  const dl = document.getElementById('customer-names');
+  if (dl) dl.innerHTML = customers.map(c => `<option value="${c.name}"></option>`).join('');
+  const t = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  const el = document.getElementById('sidebar-save-status');
+  if (el) el.innerHTML = ic('cloud') + ' クラウド同期済み ' + t;
 }
 
-// ── LOCALSTORAGE 自動保存 ──
-const STORAGE_KEY = 'bizapp_data_v1';
-
-function saveToStorage() {
+// ── 旧バージョン（localStorage保存）からのデータ移行 ──
+// クラウドが空で、この端末に旧データが残っている場合のみ、確認のうえアップロードする
+let _migrationChecked = false;
+function maybeMigrateLocal() {
+  if (_migrationChecked || !_ready.customers || !_ready.deals || !_ready.shippings) return;
+  _migrationChecked = true;
+  if (customers.length || deals.length || shippings.length) return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      deals, customers, nextId, dealId, shippings, shippingId
-    }));
-    const t = new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-    const el = document.getElementById('sidebar-save-status');
-    if (el) el.textContent = `自動保存済み ${t}`;
-    // Drive URLが登録済みなら同期ボタンを光らせる
-    const driveUrl = localStorage.getItem('bizapp_drive_url');
-    const btn = document.getElementById('drive-sync-btn');
-    if (btn) btn.style.display = driveUrl ? 'block' : 'none';
-  } catch(e) { console.warn('保存失敗:', e); }
-}
-
-function loadFromStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return false;
+    const raw = localStorage.getItem('bizapp_data_v1');
+    if (!raw) return;
     const data = JSON.parse(raw);
-    if (data.deals)     { deals     = data.deals;     dealId     = data.dealId     || deals.length; }
-    if (data.customers) { customers = data.customers; nextId     = data.nextId     || customers.length + 1; }
-    if (data.shippings) { shippings = data.shippings; shippingId = data.shippingId || shippings.length + 1; }
-    return true;
-  } catch(e) { console.warn('読み込み失敗:', e); return false; }
+    const nC = (data.customers || []).length, nD = (data.deals || []).length, nS = (data.shippings || []).length;
+    if (!nC && !nD && !nS) return;
+    if (!confirm(`この端末に旧バージョンのデータが見つかりました。\n（顧客 ${nC}件・取引 ${nD}件・発送 ${nS}件）\n\nクラウドにアップロードして全メンバーと共有しますか？`)) return;
+    const base = Date.now();
+    (data.customers || []).forEach((c, i) => { c.id = String(c.id); c.createdAt = c.createdAt || (base + i); fbApi.upsert('customers', c); });
+    (data.deals || []).forEach(d => { d.id = String(d.id); if (d.customerId != null) d.customerId = String(d.customerId); fbApi.upsert('deals', d); });
+    (data.shippings || []).forEach(sh => { sh.id = String(sh.id); if (sh.dealId != null) sh.dealId = String(sh.dealId); fbApi.upsert('shippings', sh); });
+    showToast('旧データをクラウドに移行しました');
+  } catch (e) { console.warn('移行失敗:', e); }
 }
-
-// 起動時にDriveから自動フェッチ
-function autoFetchFromDrive() {
-  const driveUrl = localStorage.getItem('bizapp_drive_url');
-  if (!driveUrl) return;
-
-  const m = driveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (!m) return;
-  const fileId = m[1];
-  const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-
-  const statusEl = document.getElementById('sidebar-save-status');
-  if (statusEl) statusEl.textContent = 'Driveから同期中…';
-
-  fetch(downloadUrl)
-    .then(r => r.ok ? r.text() : Promise.reject())
-    .then(text => {
-      const data = JSON.parse(text);
-      const result = mergeImportData(data);
-      const t = new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-      if (statusEl) statusEl.textContent = `Drive同期済み ${t}`;
-      // Drive同期ボタンを表示
-      const btn = document.getElementById('drive-sync-btn');
-      if (btn) btn.style.display = 'block';
-      // バックアップページのステータスも更新
-      const ds = document.getElementById('drive-import-status');
-      if (ds) {
-        ds.style.display = 'block';
-        ds.style.color = 'var(--success)';
-        ds.textContent = `✅ 起動時にDriveから自動同期 — 取引 ${result.addedDeals}件・顧客 ${result.addedCustomers}件 を追加`;
-      }
-    })
-    .catch(() => {
-      if (statusEl) statusEl.textContent = 'Drive同期スキップ';
-    });
-}
-
-// 保存が必要な操作をフック（saveDealは内部でsaveToStorage済みのため除外）
-const _origSaveDealEdit   = saveDealEdit;
-const _origSaveCustomer   = saveCustomer;
-const _origDeleteDeal     = deleteDeal;
-const _origDeleteCustomer = deleteCustomer;
-const _origSetDealStatus  = setDealStatus;
-
-saveDealEdit   = function()    { _origSaveDealEdit();      saveToStorage(); };
-saveCustomer   = function()    { _origSaveCustomer();      saveToStorage(); };
-deleteDeal     = function(id)  { _origDeleteDeal(id);      saveToStorage(); };
-deleteCustomer = function(id)  { _origDeleteCustomer(id);  saveToStorage(); };
-setDealStatus  = function(id,s){ _origSetDealStatus(id,s); saveToStorage(); };
 
 // ── INIT ──
-const loaded = loadFromStorage();
-if (!loaded) {
-  addRow('サンプル商品A', 10000, 30, 1);
-  addRow('サンプル商品B', 25000, 25, 2);
-}
-const d = new Date(); d.setDate(d.getDate()+30);
-document.getElementById('q-expiry').value = d.toISOString().slice(0,10);
-// 前回のDrive URLを復元
-const savedDriveUrl = localStorage.getItem('bizapp_drive_url');
-if (savedDriveUrl) {
-  const el = document.getElementById('drive-url-input');
-  if (el) el.value = savedDriveUrl;
-  // Drive同期ボタンを表示
-  const btn = document.getElementById('drive-sync-btn');
-  if (btn) btn.style.display = 'block';
-}
+addRow('サンプル商品A', 10000, 30, 1);
+addRow('サンプル商品B', 25000, 25, 2);
+const _exp = new Date(); _exp.setDate(_exp.getDate() + 30);
+document.getElementById('q-expiry').value = _exp.toISOString().slice(0, 10);
 filterCustomers();
-// 起動時にDriveから自動同期（URLが登録済みの場合）
-autoFetchFromDrive();
+try { const ds = localStorage.getItem('bizapp_deal_sort'); if (ds && document.querySelector(`#dealSort option[value="${ds}"]`)) document.getElementById('dealSort').value = ds; } catch (_) {}
+updateFxInfo();
+fetchFxRate(false);
+</script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// ★★★ ここにFirebaseコンソールで取得した設定値を貼り付けてください（セットアップ手順.md 参照） ★★★
+const firebaseConfig = {
+  apiKey: "AIzaSyBEs5na8gRvHs5cNOVAfHtLnWy38jm8t40",
+  authDomain: "ngc-quotation-app.firebaseapp.com",
+  projectId: "ngc-quotation-app",
+  storageBucket: "ngc-quotation-app.firebasestorage.app",
+  messagingSenderId: "306639073506",
+  appId: "1:306639073506:web:d4b06c051f442ff70c2ebb"
+};
+
+if (firebaseConfig.apiKey.startsWith("PASTE")) {
+  document.getElementById('login-overlay').style.display = 'none';
+  document.getElementById('setup-overlay').style.display = 'flex';
+} else {
+  const app  = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  // オフライン時もキャッシュで動作し、復帰後に自動同期される
+  const db   = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+
+  const api = {
+    upsert: (col, obj) => setDoc(doc(db, col, String(obj.id)), JSON.parse(JSON.stringify(obj)))
+      .catch(e => { console.error(e); showToast('クラウド保存に失敗しました。通信環境を確認してください'); }),
+    remove: (col, id) => deleteDoc(doc(db, col, String(id)))
+      .catch(e => { console.error(e); showToast('クラウド削除に失敗しました。通信環境を確認してください'); }),
+    subscribe: (col, cb) => onSnapshot(collection(db, col), snap => cb(snap.docs.map(d => d.data()))),
+  };
+
+  window.doLogin = async () => {
+    const email = document.getElementById('login-email').value.trim();
+    const pass  = document.getElementById('login-pass').value;
+    const err   = document.getElementById('login-error');
+    err.style.display = 'none';
+    const btn = document.getElementById('login-btn');
+    btn.textContent = 'ログイン中…';
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (e) {
+      err.textContent = 'ログインに失敗しました。メールアドレスとパスワードを確認してください。';
+      err.style.display = 'block';
+    } finally {
+      btn.textContent = 'ログイン';
+    }
+  };
+  window.doLogout = () => signOut(auth);
+
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      document.getElementById('login-overlay').style.display = 'none';
+      appStart(api, user);
+    } else {
+      document.getElementById('login-overlay').style.display = 'flex';
+    }
+  });
+}
 </script>
 </body>
 </html>
