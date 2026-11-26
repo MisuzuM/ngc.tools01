@@ -1157,14 +1157,18 @@ function priceDeal(p) {
   const cost        = lines.reduce((s, l) => s + l.cost, 0);
   const subUSDc     = lines.reduce((s, l) => s + l.totalUSDc, 0);
   const ship   = Number(p.shipping) || 0;
+  // 値引き：パーツ小計から差し引き（小計が上限）。手数料%の計算も値引き後の金額が基準
+  const discount = Math.min(Math.max(0, Math.round(Number(p.discount) || 0)), subtotalJPY);
   const cf     = p.legacy ? Math.ceil : ceilJ;
-  const sysFee = p.sysMode === 'amount' ? cf(Number(p.sysAmount) || 0) : cf((subtotalJPY + ship) * (Number(p.sysRate) || 0) / 100);
+  const sysFee = p.sysMode === 'amount' ? cf(Number(p.sysAmount) || 0) : cf((subtotalJPY - discount + ship) * (Number(p.sysRate) || 0) / 100);
   const shipUSDc = ship > 0 ? usdCents(ship, rate, fee) : 0;
   const feeUSDc  = sysFee > 0 ? usdCents(sysFee, rate, fee) : 0;
-  const grandJPY = subtotalJPY + ship + sysFee;
-  const grandUSD = p.legacy ? (rate > 0 ? grandJPY / rate * (1 + fee / 100) : 0) : (subUSDc + shipUSDc + feeUSDc) / 100;
+  const discUSDc = discount > 0 ? usdCents(discount, rate, fee) : 0;
+  const grandJPY = subtotalJPY - discount + ship + sysFee;
+  const grandUSD = p.legacy ? (rate > 0 ? grandJPY / rate * (1 + fee / 100) : 0) : (subUSDc - discUSDc + shipUSDc + feeUSDc) / 100;
   return { lines, subtotalJPY, subtotalUSD: subUSDc / 100, ship, shipUSD: shipUSDc / 100, sysFee, sysFeeUSD: feeUSDc / 100,
-           grandJPY, grandUSD, cost, profitJPY: subtotalJPY - cost, profitUSD: rate > 0 ? (subtotalJPY - cost) / rate : 0 };
+           discount, discountUSD: discUSDc / 100,
+           grandJPY, grandUSD, cost, profitJPY: subtotalJPY - discount - cost, profitUSD: rate > 0 ? (subtotalJPY - discount - cost) / rate : 0 };
 }
 function calcParams() {
   return { rows, rate: gv('fxRate') || 155, usdFee: gv('usdFee'), pr: gv('purchaseRate'), shipping: gv('shipping'),
@@ -1172,7 +1176,8 @@ function calcParams() {
 }
 function dealPriceParams(d) {
   return { rows: d.rows || [], rate: d.fxRate, usdFee: d.fxFee ?? 0, pr: d.purchaseRate ?? 0, shipping: d.shipping || 0,
-           sysMode: d.sysFeeMode || 'rate', sysRate: d.sysFeeRate || 0, sysAmount: d.sysFeeAmount || 0, legacy: !d.calcVer };
+           sysMode: d.sysFeeMode || 'rate', sysRate: d.sysFeeRate || 0, sysAmount: d.sysFeeAmount || 0,
+           discount: d.discount || 0, legacy: !d.calcVer };
 }
 // 見積書の明細行（商品・送料・手数料）
 function quoteRowsHtml(P, names, sysLabel, alwaysShowFee) {
@@ -1192,7 +1197,14 @@ function quoteRowsHtml(P, names, sysLabel, alwaysShowFee) {
       <td style="${num}">${fmtJPY(jpy)}</td>
       <td style="${num}">${fmtUSD(usd)}</td>
     </tr>`;
-  const extraRows = (P.ship > 0 ? extra('Shipping', P.ship, P.shipUSD) : '') +
+  const discRow = P.discount > 0 ? `<tr style="background:#FEF2F2">
+      <td style="${cell}color:#DC2626;font-weight:600;">Discount</td>
+      <td colspan="3" style="border-bottom:1px solid #e5e7eb;"></td>
+      <td style="${num}color:#DC2626;font-weight:600;">-${fmtJPY(P.discount)}</td>
+      <td style="${num}color:#DC2626;font-weight:600;">-${fmtUSD(P.discountUSD)}</td>
+    </tr>` : '';
+  const extraRows = discRow +
+                    (P.ship > 0 ? extra('Shipping', P.ship, P.shipUSD) : '') +
                     ((alwaysShowFee || P.sysFee > 0) ? extra(sysLabel, P.sysFee, P.sysFeeUSD) : '');
   return { productRows, extraRows };
 }
@@ -1653,6 +1665,7 @@ function renderDeals() {
         </div>`; }).join('')}
         ${d.shipping > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;"><span>送料</span><span style="font-family:'DM Mono',monospace;">${fmtJPY(d.shipping)}</span></div>` : ''}
         ${(() => { const fee = dealSysFee(d); return fee > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:3px 0;"><span>${d.sysLabel || '手数料'}</span><span style="font-family:'DM Mono',monospace;">${fmtJPY(fee)}</span></div>` : ''; })()}
+        ${dealP.discount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--danger);padding:3px 0;"><span>値引き（Discount）</span><span style="font-family:'DM Mono',monospace;">-${fmtJPY(dealP.discount)}</span></div>` : ''}
         <div style="font-size:11px;color:var(--text-3);margin-top:6px;">為替: 1 USD = ¥${d.fxRate}（${fxDate} ${fxKind}） ／ USD換算手数料: ${d.fxFee}% ／ 仕入値: ${d.purchaseRate}%</div>
       </div>
     </div>`;
@@ -1821,6 +1834,10 @@ function openDealEdit(id, draftObj) {
         <input type="number" id="de-shipping" value="${d.shipping}" oninput="refreshDealEdit()" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" />
       </div>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:6px;margin-bottom:6px;align-items:center;">
+        <div style="font-size:12px;color:var(--danger);padding:6px 8px;">値引き（円）<span style="font-size:10px;color:var(--text-3);margin-left:4px;">パーツ小計から差し引き。見積書に Discount として表示</span></div>
+        <input type="number" id="de-discount" value="${d.discount||0}" min="0" oninput="refreshDealEdit()" style="padding:6px 8px;font-size:12px;border:1px solid var(--danger);border-radius:4px;font-family:inherit;color:var(--danger);" />
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:6px;margin-bottom:6px;align-items:center;">
         <div style="font-size:12px;color:var(--text-2);padding:6px 8px;">手数料の名称<span style="font-size:10px;color:var(--text-3);margin-left:4px;">見積書に表示（例：PayPal fee / Wise fee）</span></div>
         <input type="text" id="de-syslabel" value="${d.sysLabel || appSettings.feeLabel}" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;font-family:inherit;" />
       </div>
@@ -1861,7 +1878,8 @@ function getDealEditData() {
   const ship    = parseFloat(document.getElementById('de-shipping').value) || 0;
   const sysMode = document.getElementById('de-sysmode') ? document.getElementById('de-sysmode').value : (d.sysFeeMode || 'rate');
   const sysVal  = parseFloat(document.getElementById('de-sysfee').value)  || 0;
-  return { rate, fxFee, pr, ship, sysMode, sysVal };
+  const discount = parseFloat(document.getElementById('de-discount')?.value) || 0;
+  return { rate, fxFee, pr, ship, sysMode, sysVal, discount };
 }
 
 function switchDealSysMode() {
@@ -1880,11 +1898,11 @@ function calcDealRow(r, rate, fxFee, pr) {
 function refreshDealEdit() {
   const d = editingDraft;
   if (!d) return;
-  const { rate, fxFee, pr, ship, sysMode, sysVal } = getDealEditData();
-  const P = priceDeal({ rows: d.rows, rate, usdFee: fxFee, pr, shipping: ship, sysMode, sysRate: sysVal, sysAmount: sysVal });
+  const { rate, fxFee, pr, ship, sysMode, sysVal, discount } = getDealEditData();
+  const P = priceDeal({ rows: d.rows, rate, usdFee: fxFee, pr, shipping: ship, sysMode, sysRate: sysVal, sysAmount: sysVal, discount });
   const ts = P.subtotalJPY, sysFee = P.sysFee, grandJPY = P.grandJPY, grandUSD = P.grandUSD, profitJPY = P.profitJPY;
   document.getElementById('de-summary').innerHTML =
-    `商品小計: <strong>${fmtJPY(ts)}</strong> &nbsp;／&nbsp; 送料: <strong>${fmtJPY(ship)}</strong> &nbsp;／&nbsp; 手数料: <strong>${fmtJPY(sysFee)}</strong><br>
+    `商品小計: <strong>${fmtJPY(ts)}</strong>${P.discount > 0 ? ` &nbsp;／&nbsp; <span style="color:var(--danger);">値引き: <strong>-${fmtJPY(P.discount)}</strong></span>` : ''} &nbsp;／&nbsp; 送料: <strong>${fmtJPY(ship)}</strong> &nbsp;／&nbsp; 手数料: <strong>${fmtJPY(sysFee)}</strong><br>
      <span style="color:var(--navy);font-weight:700;">見積総額: ${fmtJPY(grandJPY)} / ${fmtUSD(grandUSD)}</span> &nbsp;&nbsp;
      <span style="color:var(--success);font-weight:700;">利益: ${fmtJPY(profitJPY)}</span>`;
 }
@@ -1926,7 +1944,7 @@ function addDealRow() {
 function saveDealEdit() {
   const d = editingDraft;
   if (!d) return;
-  const { rate, fxFee, pr, ship, sysMode, sysVal } = getDealEditData();
+  const { rate, fxFee, pr, ship, sysMode, sysVal, discount } = getDealEditData();
   d.clientName = document.getElementById('de-client').value || d.clientName;
   d.memo       = document.getElementById('de-memo').value;
   d.remarks    = (document.getElementById('de-remarks').value || '').trim();
@@ -1940,6 +1958,7 @@ function saveDealEdit() {
   d.shipping   = ship;
   d.sysFeeMode = sysMode;
   if (sysMode === 'amount') d.sysFeeAmount = sysVal; else d.sysFeeRate = sysVal;
+  d.discount   = discount;
 
   computeDealTotals(d);
 
@@ -1954,7 +1973,7 @@ function previewDealEdit() {
   if (!d) return;
 
   // 編集内容を反映（モーダルを閉じずに）
-  const { rate, fxFee, pr, ship, sysMode, sysVal } = getDealEditData();
+  const { rate, fxFee, pr, ship, sysMode, sysVal, discount } = getDealEditData();
   d.clientName   = document.getElementById('de-client').value || d.clientName;
   d.memo         = document.getElementById('de-memo').value;
   d.remarks      = (document.getElementById('de-remarks').value || '').trim();
@@ -1968,6 +1987,7 @@ function previewDealEdit() {
   d.shipping     = ship;
   d.sysFeeMode   = sysMode;
   if (sysMode === 'amount') d.sysFeeAmount = sysVal; else d.sysFeeRate = sysVal;
+  d.discount     = discount;
   computeDealTotals(d);
   upsertRecord('deals', d);
   const usdFee   = fxFee;
@@ -2317,12 +2337,12 @@ function saveFeeLabelSetting() {
 }
 
 // ── 見積もり依頼シートからの引用 ──
-// 対象：各メーカーのタブで L列「直接取引」にチェックが入っている行
-// 引用：品番（C列「品番変更」に新しい品番があればそちら）→ 商品名、E列「卸値（税込）」→ 仕入原価
-// 選択可：F列「在庫状況」が 在庫あり／欠品 で、卸値が入っているもの（それ以外はグレーアウト）
-const QUOTE_SHEET_ID   = '1AGxZVaNadx2O2FopSN9XevOgIyvpDwDqrC1-g9ptJgQ';
-const QUOTE_SHEET_URL  = `https://docs.google.com/spreadsheets/d/${QUOTE_SHEET_ID}/edit`;
-const QUOTE_SHEET_TABS = ['トヨタ', 'ホンダ', '三菱', '日産', 'スバル', 'マツダ', 'スズキ', 'ヤマハ', '川崎'];
+// 対象：「①見積もり依頼」タブで O列のチェックボックスにチェックが入っている行だけ
+// 表示：品番（D列）・依頼日（A列）・価格（J列 税込。未記入なら I列 税抜）・在庫の有無（K列 在庫照会結果）・メモ（G列）
+// 引用：品番 → 商品名、価格 → 仕入原価
+const QUOTE_SHEET_ID  = '1RvyOZGrGCX_MCvl1QFZuCNPSfp8cp_5Y2-8U3xW5MdI';
+const QUOTE_SHEET_GID = '240209903';   // 「①見積もり依頼」タブ（タブ名を変えても動くようにgidで指定）
+const QUOTE_SHEET_URL = `https://docs.google.com/spreadsheets/d/${QUOTE_SHEET_ID}/edit#gid=${QUOTE_SHEET_GID}`;
 let sheetItems = [];
 let sheetLoading = false;
 
@@ -2352,44 +2372,43 @@ function parseCSV(text) {
   if (cell !== '' || row.length) { row.push(cell); out.push(row); }
   return out;
 }
-const isPartNo = t => /^[A-Za-z0-9][A-Za-z0-9-]{3,}$/.test((t || '').trim());
 const isChecked = v => /^(true|1|✓|☑|✔|o|○)$/i.test((v || '').trim());
 function parsePrice(v) { const n = parseInt(String(v || '').replace(/[^\d]/g, ''), 10); return isNaN(n) ? 0 : n; }
 
-async function fetchSheetTab(tab) {
-  const url = `https://docs.google.com/spreadsheets/d/${QUOTE_SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(tab)}`;
+// 依頼日時（例: "2026/11/21/11 :22"）→ "11/21"
+function fmtSheetDate(v) {
+  const m = /^\d{4}\/(\d{1,2})\/(\d{1,2})/.exec((v || '').trim());
+  return m ? `${m[1]}/${m[2]}` : '';
+}
+
+async function fetchSheetRows() {
+  const url = `https://docs.google.com/spreadsheets/d/${QUOTE_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${QUOTE_SHEET_GID}`;
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const data = parseCSV(await res.text());
-  if (!data.length) return [];
-  const head = data[0].map(h => (h || '').replace(/[\u0000-\u001f\s]/g, ''));
-  if (!head.includes('直接取引')) return [];          // 例示タブなど、列構成が違うものは対象外
-  const col = (test, fb) => { const i = head.findIndex(test); return i >= 0 ? i : fb; };
-  const cA = col(h => h.startsWith('依頼日'), 0), cB = col(h => h === '品番', 1), cC = col(h => h.startsWith('品番変更'), 2);
-  const cE = col(h => h.startsWith('卸値'), 4), cF = col(h => h.startsWith('在庫状況'), 5), cG = col(h => h === '納期', 6);
-  const cH = col(h => h.startsWith('納期未定'), 7), cI = col(h => h.startsWith('在庫数'), 8), cL = col(h => h === '直接取引', 11);
-  return data.slice(1).map((r, i) => {
-    const part = (r[cB] || '').trim(), change = (r[cC] || '').trim();
-    const status = (r[cF] || '').trim(), price = parsePrice(r[cE]);
-    const newPart = (isPartNo(change) && change !== part) ? change : '';
-    const it = { tab, row: i + 2, date: (r[cA] || '').trim(), part, newPart, changeNote: newPart ? '' : change, price, status,
-                 due: (r[cG] || '').trim(), dueUndecided: isChecked(r[cH]), stock: (r[cI] || '').replace(/\s+/g, ' ').trim(), direct: isChecked(r[cL]) };
-    const okStatus = status.startsWith('在庫あり') || status.startsWith('欠品');
-    it.selectable = okStatus && price > 0;
-    it.reason = !price ? (status ? `${status}・卸値未記入` : '卸値未記入') : (status || '在庫状況未記入');
+  // 列は固定：A(0)依頼日時 C(2)メーカー D(3)品番 G(6)メモ I(8)税抜 J(9)税込 K(10)在庫照会結果 O(14)チェック
+  return data.map((r, i) => {
+    const part = (r[3] || '').trim();
+    const priceInc = parsePrice(r[9]), priceEx = parsePrice(r[8]);
+    const price  = priceInc > 0 ? priceInc : priceEx;
+    const status = (r[10] || '').replace(/\s+/g, ' ').trim();
+    const it = { row: i + 1, maker: (r[2] || '').trim() || 'その他', part,
+                 date: fmtSheetDate(r[0]), memo: (r[6] || '').replace(/\s+/g, ' ').trim(),
+                 price, taxNote: (priceInc > 0 || !priceEx) ? '' : '税抜', status,
+                 checked: isChecked(r[14]) };
+    it.selectable = it.checked && price > 0 && !status.includes('廃盤');
+    it.reason = status.includes('廃盤') ? '廃盤' : (!price ? '価格未記入' : '');
     return it;
-  }).filter(it => it.direct && it.part);
+  }).filter(it => it.checked && it.part && it.part !== '品番');   // ヘッダー行は除外
 }
 
 function sheetItemLabel(it) {
-  const name = it.newPart ? `${it.newPart}（旧 ${it.part}）` : it.part;
-  const price = it.price ? fmtJPY(it.price) : '—';
-  let st;
-  if (!it.selectable) st = `【${it.reason}】選択不可`;
-  else if (it.status.startsWith('欠品')) st = `【欠品・納期${it.dueUndecided || !it.due ? '未定' : ' ' + it.due}】`;
-  else st = `【在庫あり${it.stock ? '・' + it.stock.slice(0, 16) : ''}】`;
-  const date = it.date ? `　${it.date.slice(5)}依頼` : '';
-  return `${name}　${price}　${st}${date}`;
+  const ng    = it.selectable ? '' : `【${it.reason || '選択不可'}】`;
+  const date  = it.date ? `　${it.date}依頼` : '';
+  const price = it.price ? `　${fmtJPY(it.price)}${it.taxNote ? `（${it.taxNote}）` : ''}` : '　価格未記入';
+  const st    = `　【在庫: ${it.status || '未記入'}】`;
+  const memo  = it.memo ? `　${it.memo.slice(0, 30)}${it.memo.length > 30 ? '…' : ''}` : '';
+  return `${ng}${it.part}${date}${price}${st}${memo}`;
 }
 
 async function loadSheetItems(force) {
@@ -2399,36 +2418,34 @@ async function loadSheetItems(force) {
   const sel = document.getElementById('sheet-select'), st = document.getElementById('sheet-status');
   sel.innerHTML = '<option value="">読み込み中…</option>'; sel.disabled = true;
   st.style.color = ''; st.textContent = '見積もり依頼シートを読み込んでいます…';
-  const results = await Promise.allSettled(QUOTE_SHEET_TABS.map(fetchSheetTab));
-  sheetLoading = false; sel.disabled = false;
-  const failed = QUOTE_SHEET_TABS.filter((t, i) => results[i].status === 'rejected');
-  if (failed.length === QUOTE_SHEET_TABS.length) {
+  try {
+    sheetItems = await fetchSheetRows();
+    sheetLoading = false; sel.disabled = false;
+    renderSheetSelect();
+  } catch (e) {
+    sheetLoading = false; sel.disabled = false;
     sel.innerHTML = '<option value="">読み込めませんでした</option>';
     st.style.color = 'var(--danger)';
     st.textContent = 'シートを読み込めませんでした。通信環境と、シートの共有設定（リンクを知っている全員が閲覧可）を確認してください。';
-    return;
   }
-  sheetItems = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
-  renderSheetSelect(failed);
 }
 
-function renderSheetSelect(failed) {
+function renderSheetSelect() {
   const sel = document.getElementById('sheet-select'), st = document.getElementById('sheet-status');
   if (!sheetItems.length) {
-    sel.innerHTML = '<option value="">「直接取引」にチェックの入ったパーツがありません</option>';
+    sel.innerHTML = '<option value="">チェックボックス（O列）の入ったパーツがありません</option>';
   } else {
-    sel.innerHTML = '<option value="">— 引用するパーツを選択 —</option>' + QUOTE_SHEET_TABS.map(tab => {
-      const list = sheetItems.map((it, i) => ({ it, i })).filter(x => x.it.tab === tab);
-      if (!list.length) return '';
-      return `<optgroup label="${escHtml(tab)}">${list.map(({ it, i }) =>
+    const makers = [...new Set(sheetItems.map(it => it.maker))];
+    sel.innerHTML = '<option value="">— 引用するパーツを選択 —</option>' + makers.map(mk => {
+      const list = sheetItems.map((it, i) => ({ it, i })).filter(x => x.it.maker === mk);
+      return `<optgroup label="${escHtml(mk)}">${list.map(({ it, i }) =>
         `<option value="${i}" ${it.selectable ? '' : 'disabled'}>${escHtml(sheetItemLabel(it))}</option>`).join('')}</optgroup>`;
     }).join('');
   }
   const ok = sheetItems.filter(it => it.selectable).length;
   const t = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
   st.style.color = '';
-  st.innerHTML = `直接取引 ${sheetItems.length}件（選択できるもの ${ok}件）・${t} 時点` +
-    ((failed && failed.length) ? `<br><span style="color:var(--danger);">読み込めなかったタブ：${escHtml(failed.join('、'))}</span>` : '');
+  st.textContent = `チェック済み ${sheetItems.length}件（選択できるもの ${ok}件）・${t} 時点`;
 }
 
 function toggleSheetPanel() {
@@ -2444,32 +2461,10 @@ function pickSheetItem(v) {
   const it = sheetItems[parseInt(v, 10)];
   sel.value = '';
   if (!it || !it.selectable) return;
-  const part = it.newPart || it.part;   // 発注は変更後の品番で行うため、見積書には変更後の品番を載せる
-  // お客様向けの備考（品番変更・欠品で入荷日が決まっているもの）
-  const notes = [];
-  if (it.newPart) notes.push(`* Part number change: ${it.part} has been updated to ${it.newPart}. The contents are unchanged.`);
-  const arrival = it.status.startsWith('欠品') && !it.dueUndecided ? fmtArrivalDate(it.due) : '';
-  if (arrival) notes.push(`* Part ${part} is currently out of stock and is expected to arrive on ${arrival}.`);
-  // 備考があるパーツは見積書の品番に * を付けて、Remarks に気づきやすくする
-  const name = notes.length ? `${part} *` : part;
   const empty = rows.find(r => !String(r.name || '').trim() && !(parseFloat(r.cost) > 0));
-  if (empty) { empty.name = name; empty.cost = it.price; empty.qty = empty.qty || 1; renderTable(); }
-  else addRow(name, it.price);
-  if (notes.length) {
-    const ta = document.getElementById('q-remarks');
-    notes.forEach(note => { if (!ta.value.includes(note)) ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + note; });
-    showToast(`${part} を追加しました（見積書の備考に追記しました）`);
-  } else {
-    showToast(`${part} を追加しました`);
-  }
-}
-
-// 入荷予定日を英語表記に（例：2026/10/24 → October 24, 2026）。日付でなければ空
-function fmtArrivalDate(v) {
-  const m = /^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/.exec((v || '').trim());
-  if (!m) return '';
-  const d = new Date(+m[1], +m[2] - 1, +m[3]);
-  return isNaN(d) ? '' : d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  if (empty) { empty.name = it.part; empty.cost = it.price; empty.qty = empty.qty || 1; renderTable(); }
+  else addRow(it.part, it.price);
+  showToast(`${it.part} を追加しました`);
 }
 
 // ── オーダー番号（発送用） ──
